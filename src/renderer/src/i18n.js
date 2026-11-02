@@ -1,0 +1,399 @@
+// Minimal i18n — zh-CN primary, en fallback. Original UI copy.
+const messages = {
+  zh: {
+    appName: 'Tomatodo',
+    mode: { todo: '待办', note: '便签', switch: '切换模式' },
+    smart: {
+      myday: '我的一天',
+      important: '重要',
+      planned: '已计划',
+      open: '未完成',
+      all: '所有任务',
+      completed: '已完成'
+    },
+    add: { placeholder: '添加任务', placeholderMyDay: '添加到“我的一天”', hint: '回车保存 · 支持“明天 3点”等日期识别' },
+    task: {
+      steps: '步骤',
+      addStep: '添加步骤',
+      note: '备注',
+      due: '截止日期',
+      reminder: '提醒',
+      repeat: '重复',
+      myday: '我的一天',
+      important: '重要',
+      today: '今天',
+      tomorrow: '明天',
+      nextWeek: '下周',
+      pickDate: '选择日期',
+      noDue: '移除截止日期',
+      overdue: '已逾期',
+      dueToday: '今天到期',
+      dueTomorrow: '明天到期',
+      completed: '已完成于',
+      created: '创建于',
+      none: '无',
+      daily: '每天', weekly: '每周', monthly: '每月', yearly: '每年',
+      weekdays: ['周日', '周一', '周二', '周三', '周四', '周五', '周六'],
+      once: '不重复',
+      attachment: '附件',
+      addFile: '添加文件',
+      addLink: '添加链接',
+      delete: '删除任务',
+      move: '移动到…',
+      copy: '复制到…',
+      moved: '已移动',
+      deleted: '已删除',
+      undo: '撤销',
+      stepDeleted: '步骤已删除',
+      done: '完成'
+    },
+    view: {
+      sort: '排序',
+      group: '分组',
+      sortBy: '排序方式',
+      groupBy: '分组方式',
+      importance: '重要',
+      due: '截止日期',
+      alphabetical: '字母顺序',
+      creation: '创建时间',
+      manual: '手动',
+      byDue: '按截止日期',
+      noGroup: '不分组',
+      ascending: '升序',
+      descending: '降序',
+      showCompleted: '显示已完成',
+      hideCompleted: '隐藏已完成',
+      completedCount: '{n} 个已完成',
+      completedEmpty: '还没有已完成的任务，去完成一个吧',
+      openEmpty: '没有未完成的任务，享受当下 ☀️',
+      clearCompleted: '清除已完成',
+      clearCompletedConfirm: '将永久删除 {n} 个已完成任务，确定清除吗？',
+    },
+    myday: { empty1: '专注于今天', empty2: '专注你的一天，专注于当下', focusToday: '今日待办', addFirst: '添加你的第一个任务' },
+    note: {
+      title: '便签',
+      new: '新建便签',
+      placeholder: '输入标题…',
+      contentPlaceholder: '记录内容…',
+      search: '搜索便签（标题与内容）',
+      empty: '还没有便签，用菜单栏快速记录一条吧',
+      noResults: '没有匹配的便签',
+      pinned: '已置顶',
+      pin: '置顶',
+      unpin: '取消置顶',
+      delete: '删除便签',
+      copy: '复制便签',
+      deleted: '便签已删除',
+      updated: '修改于',
+      colors: '颜色',
+      count: '{n} 条便签'
+    },
+    pomo: {
+      title: '番茄钟',
+      work: '专注',
+      break: '休息',
+      start: '开始',
+      pause: '暂停',
+      reset: '重置',
+      resume: '继续',
+      sessions: '今日完成 {n} 个番茄',
+      workMin: '专注时长（分钟）',
+      breakMin: '休息时长（分钟）',
+      openApp: '打开番茄钟'
+    },
+    pin: { on: '取消置顶', off: '置顶' },
+    wxset: {
+      mode: '定位方式',
+      auto: '自动定位',
+      manual: '手动城市',
+      city: '城市名称',
+      cityHint: '获取定位失败时将使用该城市（默认北京）',
+      apiBase: '接口地址',
+      apiKey: 'API Key',
+      apiHint: '默认 Open-Meteo（免密钥）；可切换为自建或兼容服务',
+      refresh: '刷新天气数据'
+    },
+    focus: {
+      title: '专注中',
+      work: '专注',
+      break: '休息',
+      exit: '退出专注',
+      done: '本轮完成！',
+      sessions: '今日 {n} 个番茄',
+      tapStart: '点击开始专注',
+      hint: '专注进行中，窗口已进入极简模式'
+    },
+    ctx: {
+      wallpaper: '背景图片…',
+      colorTitle: '纯色背景',
+      wallpaperClear: '清除背景',
+      blur: '模糊度',
+      dim: '暗化度',
+      moreSettings: '更多背景设置…'
+    },
+    search: { placeholder: '搜索任务、便签、步骤和备注', tasks: '任务', notes: '便签', noResults: '没有找到结果', recent: '最近搜索', clear: '清除', initial: '要查找什么？可搜索任务、步骤、备注与便签' },
+    dialog: {
+      rename: '重命名',
+      confirm: '确认',
+      cancel: '取消',
+      deleteTitle: '确认删除',
+      deleteTaskMsg: '删除后可通过通知条撤销。',
+      ok: '确定',
+      linkTitle: '添加链接',
+      linkPlaceholder: 'https://…',
+      inputTitle: '输入'
+    },
+    settings: {
+      title: '设置',
+      general: '通用',
+      appearance: '外观',
+      wallpaper: '背景',
+      tray: '菜单栏',
+      notifications: '通知',
+      sectionOrder: '快速记录窗口模块顺序',
+      sectionOrderHint: '拖动卡片可调整快速记录窗口中三个模块的显示顺序',
+      pomo: '番茄钟',
+      data: '数据',
+      about: '关于',
+      theme: '主题',
+      themeSystem: '跟随系统', themeLight: '浅色', themeDark: '深色',
+      language: '语言',
+      langSystem: '跟随系统',
+      newTasksOnTop: '新任务添加到顶部',
+      moveStarredToTop: '重要任务置顶',
+      recognizeDates: '识别任务标题中的日期和时间',
+      stripDates: '识别后从标题中移除日期',
+      playSound: '完成时播放提示音',
+      confirmDelete: '删除前确认',
+      launchAtLogin: '开机自动启动',
+      showTray: '启用菜单栏图标（快速操作）',
+      badge: 'Dock 徽章显示',
+      badgeDue: '今天到期与逾期',
+      badgeMyday: '我的一天未完成',
+      badgeOpen: '全部未完成',
+      badgeNever: '不显示',
+      dueTodayNotif: '“今日到期”通知',
+      dueTodayTime: '通知时间',
+      globalShortcut: '全局快捷键（唤起快速添加）',
+      trayIconStyle: '菜单栏图标样式',
+      backup: '定时备份',
+      backupEnable: '启用定时备份',
+      backupFreq: '备份频次',
+      backupDaily: '每天',
+      backupWeekday: '工作日（周一至周五）',
+      backupWeekly: '每周一',
+      backupTime: '备份时间',
+      backupLast: '上次备份',
+      backupNever: '尚未备份',
+      backupFile: '备份文件',
+      backupNow: '立即备份',
+      backupDone: '备份完成',
+      backupFailed: '备份失败',
+      backupOpenDir: '打开备份目录',
+      notesDir: '便签存放目录',
+      notesOpenDir: '打开便签目录',
+      trayIconMono: '单色（自适应）',
+      trayIconColor: '彩色（无背景）',
+      bgImage: '内容区背景图片',
+      bgChoose: '选择图片…',
+      bgClear: '清除',
+      bgBlur: '模糊度',
+      bgDim: '暗化',
+      export: '导出数据 (JSON)',
+      aboutText: '一个带菜单栏快速操作的本地待办与便签应用。',
+      disclaimer: '原创实现 · Electron + Vue + SQLite · 数据 100% 本地',
+      saved: '已保存'
+    },
+    quick: {
+      title: '快速记录',
+      tabTodo: '待办',
+      tabNote: '便签',
+      placeholderTodo: '要做什么？“明天 3点 买菜”',
+      placeholderNote: '记一条…第一行作为标题',
+      add: '添加',
+      today: '今日待办',
+      myday: '我的一天',
+      notes: '便签',
+      notesFilter: '筛选便签…',
+      noTasks: '今天没有任务，享受当下 ☀️',
+      noNotes: '还没有便签',
+      openApp: '打开主窗口',
+      added: '已添加',
+      openNote: '打开',
+      markDone: '标记为已完成',
+      important: '重要',
+      noMore: '暂无更多信息',
+      pin: '置顶显示',
+      unpin: '取消置顶'
+    },
+    tray: {
+      openApp: '打开主窗口',
+      quickAdd: '快速记录…',
+      mydayCount: '我的一天：{n}',
+      dueCount: '今日到期：{n}',
+      quit: '退出'
+    },
+    misc: { tasks: '个任务', ok: '确定', cancel: '取消', delete: '删除', rename: '重命名', create: '创建', name: '名称', selected: '已选择' }
+  },
+  en: {
+    appName: 'Tomatodo',
+    mode: { todo: 'To-Do', note: 'Notes', switch: 'Switch mode' },
+    smart: {
+      myday: 'My Day',
+      important: 'Important',
+      planned: 'Planned',
+      open: 'Open',
+      all: 'All Tasks',
+      completed: 'Completed'
+    },
+    add: { placeholder: 'Add a task', placeholderMyDay: 'Add to My Day', hint: 'Enter to save · try “tomorrow 3pm”' },
+    task: {
+      steps: 'Steps', addStep: 'Add step', note: 'Note', due: 'Due date', reminder: 'Reminder', repeat: 'Repeat',
+      myday: 'My Day', important: 'Important', today: 'Today', tomorrow: 'Tomorrow', nextWeek: 'Next week',
+      pickDate: 'Pick a date', noDue: 'Remove due date', overdue: 'Overdue', dueToday: 'Due today', dueTomorrow: 'Due tomorrow',
+      completed: 'Completed on', created: 'Created', none: 'None',
+      daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly', yearly: 'Yearly',
+      weekdays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], once: 'Never',
+      attachment: 'Attachments', addFile: 'Add file', addLink: 'Add link',
+      delete: 'Delete task', move: 'Move to…', copy: 'Copy to…', moved: 'Moved', deleted: 'Deleted',
+      undo: 'Undo', stepDeleted: 'Step deleted', done: 'Done'
+    },
+    view: {
+      sort: 'Sort', group: 'Group', sortBy: 'Sort by', groupBy: 'Group by',
+      importance: 'Importance', due: 'Due date', alphabetical: 'Alphabetical', creation: 'Creation date', manual: 'Manual',
+      byDue: 'By due date', noGroup: 'None', ascending: 'Ascending', descending: 'Descending',
+      showCompleted: 'Show completed', hideCompleted: 'Hide completed',
+      completedCount: '{n} completed',
+      completedEmpty: 'Nothing completed yet — go finish one!',
+      openEmpty: 'No open tasks. Enjoy ☀️',
+      clearCompleted: 'Clear completed',
+      clearCompletedConfirm: 'Permanently delete {n} completed tasks?',
+    },
+    myday: { empty1: 'Focus on your day', empty2: 'Get things done with My Day, a list that refreshes every day.', focusToday: 'Today', addFirst: 'Add your first task' },
+    note: {
+      title: 'Notes', new: 'New note', placeholder: 'Title…', contentPlaceholder: 'Write something…',
+      search: 'Search notes (title & content)', empty: 'No notes yet — capture one from the menu bar',
+      noResults: 'No matching notes', pinned: 'Pinned', pin: 'Pin', unpin: 'Unpin',
+      delete: 'Delete note',
+      copy: 'Copy note', deleted: 'Note deleted', updated: 'Updated', colors: 'Color', count: '{n} notes'
+    },
+    pomo: {
+      title: 'Pomodoro', work: 'Focus', break: 'Break', start: 'Start', pause: 'Pause', reset: 'Reset', resume: 'Resume',
+      sessions: '{n} pomodoros today', workMin: 'Focus length (min)', breakMin: 'Break length (min)', openApp: 'Open Pomodoro'
+    },
+    pin: { on: 'Unpin', off: 'Pin' },
+    wxset: {
+      mode: 'Location',
+      auto: 'Auto locate',
+      manual: 'Manual city',
+      city: 'City name',
+      cityHint: 'Used when auto-locate fails (default: Beijing)',
+      apiBase: 'API endpoint',
+      apiKey: 'API Key',
+      apiHint: 'Default Open-Meteo (no key); switch to self-hosted or compatible services',
+      refresh: 'Refresh weather data'
+    },
+    focus: {
+      title: 'Focus',
+      work: 'Focus',
+      break: 'Break',
+      exit: 'Exit focus',
+      done: 'Session complete!',
+      sessions: '{n} pomodoros today',
+      tapStart: 'Tap to start',
+      hint: 'Focus in progress — minimal mode'
+    },
+    ctx: {
+      wallpaper: 'Background image…',
+      colorTitle: 'Solid colors',
+      wallpaperClear: 'Clear background',
+      blur: 'Blur',
+      dim: 'Dim',
+      moreSettings: 'More wallpaper settings…'
+    },
+    search: { placeholder: 'Search tasks, notes, steps and notes body', tasks: 'Tasks', notes: 'Notes', noResults: 'No results found', recent: 'Recent', clear: 'Clear', initial: 'What would you like to find? Search tasks, steps, notes and memos' },
+    dialog: {
+      rename: 'Rename', confirm: 'Confirm', cancel: 'Cancel', deleteTitle: 'Confirm delete',
+      deleteTaskMsg: 'You can undo from the toast after deleting.', ok: 'OK',
+      linkTitle: 'Add link', linkPlaceholder: 'https://…', inputTitle: 'Input'
+    },
+    settings: {
+      title: 'Settings', general: 'General', appearance: 'Appearance', wallpaper: 'Wallpaper', tray: 'Menu Bar',
+      notifications: 'Notifications', pomo: 'Pomodoro', weather: 'Weather', sectionOrder: 'Quick panel section order', sectionOrderHint: 'Drag the cards to reorder sections in the quick panel', data: 'Data', about: 'About',
+      theme: 'Theme', themeSystem: 'System', themeLight: 'Light', themeDark: 'Dark',
+      language: 'Language', langSystem: 'System',
+      newTasksOnTop: 'Add new tasks on top', moveStarredToTop: 'Move starred to top',
+      recognizeDates: 'Recognize dates in task titles', stripDates: 'Strip recognized dates from titles',
+      playSound: 'Play completion sound', confirmDelete: 'Confirm before deleting',
+      launchAtLogin: 'Open at startup', showTray: 'Enable menu bar icon (quick actions)',
+      badge: 'Dock badge shows', badgeDue: 'Due today & overdue', badgeMyday: 'My Day open', badgeOpen: 'All open', badgeNever: 'Never',
+      dueTodayNotif: '“Due Today” notification', dueTodayTime: 'Notification time',
+      globalShortcut: 'Global shortcut (quick capture)',
+      trayIconStyle: 'Menu bar icon style',
+      backup: 'Scheduled backup',
+      backupEnable: 'Enable scheduled backup',
+      backupFreq: 'Frequency',
+      backupDaily: 'Every day',
+      backupWeekday: 'Weekdays (Mon–Fri)',
+      backupWeekly: 'Every Monday',
+      backupTime: 'Backup time',
+      backupLast: 'Last backup',
+      backupNever: 'Never',
+      backupFile: 'Backup file',
+      backupNow: 'Back up now',
+      backupDone: 'Backup complete',
+      backupFailed: 'Backup failed',
+      backupOpenDir: 'Open backup folder',
+      notesDir: 'Notes folder',
+      notesOpenDir: 'Open notes folder',
+      trayIconMono: 'Monochrome (adaptive)',
+      trayIconColor: 'Colored (no background)',
+      bgImage: 'Content background image', bgChoose: 'Choose image…', bgClear: 'Clear', bgBlur: 'Blur', bgDim: 'Dim',
+      export: 'Export data (JSON)',
+      aboutText: 'A local to-do & notes app with first-class menu bar quick actions.',
+      disclaimer: 'Original implementation · Electron + Vue + SQLite · 100% local data',
+      saved: 'Saved'
+    },
+    quick: {
+      title: 'Quick Capture', tabTodo: 'To-Do', tabNote: 'Note',
+      placeholderTodo: 'What needs doing? “Buy milk tomorrow 3pm”',
+      placeholderNote: 'Jot something… first line becomes the title',
+      add: 'Add', today: 'Today’s tasks', myday: 'My Day', notes: 'All notes', notesFilter: 'Filter notes…',
+      noTasks: 'Nothing due today. Enjoy ☀️', noNotes: 'No notes yet',
+      openApp: 'Open main window', added: 'Added', openNote: 'Open',
+      markDone: 'Mark as completed', important: 'Important',
+      noMore: 'No more details',
+      pin: 'Keep on top', unpin: 'Unpin'
+    },
+    tray: {
+      openApp: 'Open Main Window', quickAdd: 'Quick Capture…', mydayCount: 'My Day: {n}', dueCount: 'Due today: {n}', quit: 'Quit'
+    },
+    misc: { tasks: ' tasks', ok: 'OK', cancel: 'Cancel', delete: 'Delete', rename: 'Rename', create: 'Create', name: 'Name', selected: 'selected' }
+  }
+}
+
+let currentLang = 'zh'
+
+export function setLanguage(lang) {
+  currentLang = lang === 'en' ? 'en' : 'zh'
+}
+
+export function getLanguage() {
+  return currentLang
+}
+
+export function t(path, params = {}) {
+  const parts = path.split('.')
+  let node = messages[currentLang]
+  for (const p of parts) {
+    node = node?.[p]
+    if (node === undefined) {
+      node = messages.en
+      for (const q of parts) { node = node?.[q]; if (node === undefined) return path }
+      break
+    }
+  }
+  let out = typeof node === 'string' ? node : path
+  for (const [k, v] of Object.entries(params)) out = out.replaceAll(`{${k}}`, String(v))
+  return out
+}

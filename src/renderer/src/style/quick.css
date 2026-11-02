@@ -1,0 +1,14 @@
+/* Quick panel — compact menu bar popup */
+html, body, #quick-app { height: 100%; }
+body {
+  background: transparent;
+  font-family: var(--font-stack);
+  color: var(--fg-text);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  overflow: hidden;
+}
+input, textarea { user-select: text; }
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: var(--r-full); }
+::-webkit-scrollbar-track { background: transparent; }

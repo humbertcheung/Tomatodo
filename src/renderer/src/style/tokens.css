@@ -1,0 +1,227 @@
+/* ============================================================
+   TodoMenuBar design tokens — original Fluent-inspired system
+   Theme-aware: every color is a token; no hardcoded palette
+   inside components. Light/dark via [data-theme].
+   ============================================================ */
+
+:root {
+  /* typography */
+  --font-stack: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-base: 14px;
+  --fs-md: 15px;
+  --fs-lg: 17px;
+  --fs-xl: 21px;
+  --fs-hero: 28px;
+
+  /* spacing scale */
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px;
+  --s-6: 24px; --s-8: 32px; --s-10: 40px; --s-12: 48px;
+
+  /* radii */
+  --r-sm: 6px; --r-md: 10px; --r-lg: 14px; --r-xl: 18px; --r-full: 999px;
+
+  /* motion */
+  --ease: cubic-bezier(.2, 0, 0, 1);
+  --t-fast: 120ms var(--ease);
+  --t-med: 180ms var(--ease);
+  --t-slow: 260ms var(--ease);
+
+  /* list theme palette (themeBackground parity) */
+  --theme-blue: #3f6df6;   --theme-blue-soft: #e3ebfe;
+  --theme-teal: #0f9b9b;   --theme-teal-soft: #d8f3f2;
+  --theme-green: #2e9e5b;  --theme-green-soft: #ddf3e5;
+  --theme-olive: #7a9c2f;  --theme-olive-soft: #ecf4d8;
+  --theme-yellow: #c9971a; --theme-yellow-soft: #faf0d3;
+  --theme-orange: #e07c2c; --theme-orange-soft: #fceada;
+  --theme-red: #d84f35;    --theme-red-soft: #fbe3de;
+  --theme-crimson: #c73a5b;--theme-crimson-soft: #f9e0e7;
+  --theme-pink: #d7529b;   --theme-pink-soft: #fae3f0;
+  --theme-purple: #8b55d6; --theme-purple-soft: #ece2fa;
+  --theme-violet: #5b5bd6; --theme-violet-soft: #e5e5fb;
+  --theme-steel: #5a7184;  --theme-steel-soft: #e2eaf0;
+}
+
+/* ---------- light theme (default) ---------- */
+:root, :root[data-theme="light"] {
+  color-scheme: light;
+  --bg-window: #f6f6f8;
+  --bg-sidebar: #eeeef2;
+  --bg-content: #fafafb;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f4f5f8;
+  --bg-input: #ffffff;
+  --bg-field: #e7e9f1;            /* deeper shade of the sidebar family for inputs */
+  --bg-popover: #ffffff;
+  --bg-hover: rgba(0, 0, 0, 0.045);
+  --bg-active: rgba(0, 0, 0, 0.08);
+  --bg-selected: rgba(63, 109, 246, 0.10);
+  --bg-accent-soft: rgba(63, 109, 246, 0.08);
+
+  --fg-text: #1c1c1e;
+  --fg-secondary: #55555c;
+  --fg-tertiary: #8e8e96;
+  --fg-disabled: #b6b6bd;
+  --fg-on-accent: #ffffff;
+
+  --accent: #3f6df6;
+  --accent-hover: #355fe0;
+  --accent-soft: rgba(63, 109, 246, 0.12);
+  --danger: #d84f35;
+  --warning: #c9971a;
+  --success: #2e9e5b;
+
+  --border: rgba(0, 0, 0, 0.09);
+  --border-strong: rgba(0, 0, 0, 0.16);
+  --divider: rgba(0, 0, 0, 0.06);
+
+  --shadow-card: 0 1px 2px rgba(20, 22, 31, 0.05), 0 1px 6px rgba(20, 22, 31, 0.04);
+  --shadow-pop: 0 4px 12px rgba(20, 22, 31, 0.10), 0 16px 40px rgba(20, 22, 31, 0.14);
+  --shadow-today: 0 8px 28px rgba(63, 80, 246, 0.18);
+
+  --scrollbar-thumb: rgba(0, 0, 0, 0.18);
+  --backdrop: rgba(24, 26, 34, 0.32);
+
+  --today-grad: linear-gradient(132deg, #4a7bf7 0%, #6a5df0 45%, #9b59e0 100%);
+  --card-tint: var(--accent);
+
+  /* ---------- light-mode surface washes ----------
+     Flat greys made the light theme look dull. These soft radial/linear
+     washes give the window, content area and sidebar a gentle colour depth
+     without ever tinting the text. */
+  --surface-window:
+    radial-gradient(1100px 680px at 10% -10%, #e4ecff 0%, rgba(228, 236, 255, 0) 60%),
+    radial-gradient(880px 600px at 94% 2%, #f5e6fb 0%, rgba(245, 230, 251, 0) 58%),
+    radial-gradient(980px 680px at 82% 98%, #e2f5f4 0%, rgba(226, 245, 244, 0) 58%),
+    linear-gradient(168deg, #f7f8fd 0%, #f1f2f9 100%);
+  --surface-content:
+    linear-gradient(178deg, rgba(255, 255, 255, 0.78) 0%, rgba(255, 255, 255, 0) 42%),
+    linear-gradient(180deg, #fbfcff 0%, #f5f6fc 100%);
+  --surface-sidebar:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.62) 0%, rgba(255, 255, 255, 0) 32%),
+    linear-gradient(180deg, #eff1fa 0%, #e8ebf6 100%);
+  --surface-card:
+    linear-gradient(122deg, #ffffff 0%, color-mix(in srgb, var(--card-tint) 13%, #ffffff) 100%);
+  --border-card: color-mix(in srgb, var(--card-tint) 24%, rgba(23, 26, 38, 0.10));
+  --shadow-card: 0 1px 2px rgba(23, 26, 38, 0.05), 0 4px 14px rgba(23, 26, 38, 0.05);
+  --shadow-pop: 0 6px 16px rgba(23, 26, 38, 0.10), 0 20px 48px rgba(23, 26, 38, 0.14);
+  --glow-accent: 0 10px 28px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+/* ---------- dark theme — cyberpunk neon ---------- */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-window: #0b0b16;
+  --bg-sidebar: #0e0e1e;
+  --bg-content: #0d0d1b;
+  --bg-card: #15152b;
+  --bg-card-hover: #1c1c38;
+  --bg-input: #181832;
+  --bg-field: #12122a;
+  --bg-popover: #171730;
+  --bg-hover: rgba(255, 45, 149, 0.10);
+  --bg-active: rgba(0, 240, 255, 0.12);
+  --bg-selected: rgba(255, 45, 149, 0.18);
+  --bg-accent-soft: rgba(0, 240, 255, 0.12);
+
+  --fg-text: #eceafd;
+  --fg-secondary: #b6b3e6;
+  --fg-tertiary: #7774b8;
+  --fg-disabled: #4a4779;
+  --fg-on-accent: #0b0b16;
+
+  --accent: #ff2d95;
+  --accent-hover: #ff5cad;
+  --accent-soft: rgba(255, 45, 149, 0.20);
+  --danger: #ff3860;
+  --warning: #ffb800;
+  --success: #39ff9c;
+
+  --border: rgba(0, 240, 255, 0.14);
+  --border-strong: rgba(0, 240, 255, 0.38);
+  --divider: rgba(128, 120, 220, 0.14);
+
+  --shadow-card: 0 0 0 1px rgba(0, 240, 255, 0.05), 0 2px 12px rgba(0, 0, 0, 0.55);
+  --shadow-pop: 0 0 0 1px rgba(255, 45, 149, 0.20), 0 4px 14px rgba(0, 0, 0, 0.55), 0 0 32px rgba(255, 45, 149, 0.18);
+  --shadow-today: 0 8px 32px rgba(181, 55, 242, 0.40), 0 0 24px rgba(255, 45, 149, 0.22);
+
+  --scrollbar-thumb: rgba(0, 240, 255, 0.22);
+  --backdrop: rgba(4, 4, 14, 0.62);
+
+  --today-grad: linear-gradient(132deg, #b537f2 0%, #ff2d95 55%, #7a2ff0 85%, #00c8ff 130%);
+  --card-tint: #8b8bd0;
+
+  /* dark equivalents of the light surface washes */
+  --surface-window:
+    radial-gradient(1000px 620px at 10% -10%, rgba(120, 40, 200, 0.20) 0%, rgba(120, 40, 200, 0) 60%),
+    radial-gradient(820px 560px at 94% 2%, rgba(255, 45, 149, 0.14) 0%, rgba(255, 45, 149, 0) 58%),
+    radial-gradient(900px 640px at 82% 98%, rgba(0, 200, 255, 0.10) 0%, rgba(0, 200, 255, 0) 58%),
+    linear-gradient(168deg, #0b0b16 0%, #0d0d1d 100%);
+  --surface-content:
+    linear-gradient(178deg, rgba(120, 90, 220, 0.08) 0%, rgba(120, 90, 220, 0) 42%),
+    linear-gradient(180deg, #0d0d1b 0%, #0b0b18 100%);
+  --surface-sidebar:
+    linear-gradient(180deg, rgba(255, 45, 149, 0.06) 0%, rgba(255, 45, 149, 0) 32%),
+    linear-gradient(180deg, #0e0e1e 0%, #0c0c1a 100%);
+  --surface-card:
+    linear-gradient(122deg, #15152b 0%, color-mix(in srgb, var(--card-tint) 16%, #15152b) 100%);
+  --border-card: color-mix(in srgb, var(--card-tint) 30%, rgba(0, 240, 255, 0.14));
+  --glow-accent: 0 10px 30px rgba(255, 45, 149, 0.24);
+}
+
+/* soft theme color pairs for dark mode */
+:root[data-theme="dark"] {
+  --theme-blue-soft: rgba(101, 134, 255, 0.18);
+  --theme-teal-soft: rgba(31, 178, 178, 0.18);
+  --theme-green-soft: rgba(72, 176, 108, 0.18);
+  --theme-olive-soft: rgba(150, 182, 60, 0.18);
+  --theme-yellow-soft: rgba(224, 176, 52, 0.18);
+  --theme-orange-soft: rgba(230, 145, 66, 0.18);
+  --theme-red-soft: rgba(235, 100, 72, 0.18);
+  --theme-crimson-soft: rgba(224, 82, 116, 0.18);
+  --theme-pink-soft: rgba(228, 100, 168, 0.18);
+  --theme-purple-soft: rgba(160, 110, 226, 0.18);
+  --theme-violet-soft: rgba(115, 115, 240, 0.18);
+  --theme-steel-soft: rgba(115, 140, 160, 0.20);
+}
+
+/* ---------- base ---------- */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #app { height: 100%; }
+body {
+  font-family: var(--font-stack);
+  font-size: var(--fs-base);
+  color: var(--fg-text);
+  background: var(--surface-window);
+  background-color: var(--bg-window);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+  user-select: none;
+  cursor: default;
+}
+input, textarea, [contenteditable] { user-select: text; cursor: text; }
+button { font-family: inherit; }
+
+::selection { background: var(--accent-soft); }
+
+/* scrollbars */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--r-full);
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background-color: var(--fg-tertiary); background-clip: content-box; }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* focus visibility */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: var(--r-sm); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
