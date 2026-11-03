@@ -43,7 +43,10 @@
 
 /* popover base */
 .popover {
-  position: fixed;
+  /* anchored to the .pop-anchor it lives in — a viewport-fixed popover
+     jumped to the window edge and ended up under the top bar / over the
+     detail column instead of under its own button */
+  position: absolute;
   z-index: 100;
   background: var(--bg-popover);
   border: 1px solid var(--border);

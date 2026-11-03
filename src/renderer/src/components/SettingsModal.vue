@@ -5,6 +5,8 @@ import { t } from '../i18n'
 import { X, Palette, SlidersHorizontal, PanelTop, BellRing, Database, Info, Download, Image, Timer, ListChecks, CloudSun, Archive, FolderOpen } from 'lucide-vue-next'
 
 const emit = defineEmits(['close'])
+// injected from package.json at build time — always matches the app version
+const version = __APP_VERSION__
 const tab = ref('appearance')
 const loginItem = ref(false)
 
@@ -111,7 +113,7 @@ async function clearBg() {
 // weather settings
 const wxGeo = ref(null)
 async function refreshGeo() {
-  wxGeo.value = await window.api.weather.get()
+  wxGeo.value = await window.api.weather.refresh()
   toast(t('settings.saved'))
 }
 
@@ -368,6 +370,7 @@ const bgPreview = computed(() => {
                   @blur="setSetting('weatherCity', $event.target.value.trim() || '北京')"
                 />
                 <div class="set-hint full">{{ t('wxset.cityHint') }}</div>
+                <div v-if="wxGeo?.city" class="set-hint full">当前定位：{{ wxGeo.city }}<span v-if="wxGeo.unresolved">（未找到该城市）</span></div>
               </div>
               <div class="set-row wrap">
                 <label>{{ t('wxset.apiBase') }}</label>
@@ -464,7 +467,7 @@ const bgPreview = computed(() => {
               <img v-if="aboutLogo" class="about-logo-img" :src="aboutLogo" alt="Tomatodo" />
               <div v-else class="about-logo"><ListChecks :size="26" /></div>
               <div class="about-name">Tomatodo</div>
-              <div class="about-ver">2.3.0 · Electron + Vue + SQLite</div>
+              <div class="about-ver">{{ version }} · Electron + Vue + SQLite</div>
               <p class="about-text">{{ t('settings.aboutText') }}</p>
               <p class="about-disclaimer">{{ t('settings.disclaimer') }}</p>
             </template>

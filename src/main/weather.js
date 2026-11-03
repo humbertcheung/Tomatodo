@@ -4,7 +4,7 @@
  * for offline display.
  */
 import { net } from 'electron'
-import { getSetting, setSetting } from './db'
+import { getSetting, setSetting } from './db.js'
 
 let cache = { at: 0, data: null }
 const TTL = 30 * 60 * 1000
@@ -33,45 +33,103 @@ function fetchJSON(url, timeoutMs = 8000) {
   })
 }
 
+/** IP-geolocation providers, tried in order (no key required) */
+const IP_PROVIDERS = [
+  {
+    url: 'https://ipwho.is/',
+    pick: (j) => (j?.success !== false && typeof j?.latitude === 'number'
+      ? { lat: j.latitude, lon: j.longitude, city: j.city || j.region || '' } : null)
+  },
+  {
+    url: 'https://api.ip.sb/geoip',
+    pick: (j) => (typeof j?.latitude === 'number'
+      ? { lat: j.latitude, lon: j.longitude, city: j.city || j.region || '' } : null)
+  },
+  {
+    url: 'https://ipapi.co/json/',
+    pick: (j) => (typeof j?.latitude === 'number'
+      ? { lat: j.latitude, lon: j.longitude, city: j.city || j.region || '' } : null)
+  },
+  {
+    url: 'https://ifconfig.co/json',
+    pick: (j) => (typeof j?.latitude === 'number'
+      ? { lat: j.latitude, lon: j.longitude, city: j.city || j.country_name || '' } : null)
+  }
+]
+
+/** representative city for the system time zone (last-resort fallback) */
+const TZ_CITY = {
+  'Asia/Shanghai': '上海', 'Asia/Chongqing': '重庆', 'Asia/Harbin': '哈尔滨',
+  'Asia/Urumqi': '乌鲁木齐', 'Asia/Kashgar': '喀什', 'Asia/Hong_Kong': '香港',
+  'Asia/Macau': '澳门', 'Asia/Taipei': '台北', 'Asia/Tokyo': '东京',
+  'Asia/Seoul': '首尔', 'Europe/London': '伦敦', 'America/New_York': '纽约',
+  'America/Los_Angeles': '洛杉矶', 'Europe/Paris': '巴黎', 'Europe/Berlin': '柏林'
+}
+
+function systemCity() {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''
+    return TZ_CITY[tz] || (tz.includes('/') ? tz.split('/').pop().replace(/_/g, ' ') : '')
+  } catch { return '' }
+}
+
+/** geocode a city name through Open-Meteo */
+async function geocodeCity(city) {
+  if (!city) return null
+  const g = await fetchJSON(
+    `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=zh`
+  )
+  const hit = g?.results?.[0]
+  if (hit && typeof hit.latitude === 'number') {
+    return { lat: hit.latitude, lon: hit.longitude, city: hit.name || city }
+  }
+  return null
+}
+
+/** ask every provider in turn; the first usable answer wins */
+async function ipLocation() {
+  for (const p of IP_PROVIDERS) {
+    try {
+      const j = await fetchJSON(p.url, 3500)
+      const loc = p.pick(j)
+      if (loc) return loc
+    } catch { /* try the next provider */ }
+  }
+  return null
+}
+
 async function resolveLocation() {
-  // manual city mode → geocode via Open-Meteo geocoding
   const mode = getSetting('weatherMode', 'auto')
+
+  // manual city mode → geocode via Open-Meteo
   if (mode === 'manual') {
-    const city = getSetting('weatherCity', '北京') || '北京'
+    const city = (getSetting('weatherCity', '北京') || '北京').trim()
     const cached = getSetting('weatherGeo', null)
     if (cached && cached.city === city && cached.lat) return cached
-    try {
-      const g = await fetchJSON(
-        `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=zh`
-      )
-      const hit = g?.results?.[0]
-      if (hit && typeof hit.latitude === 'number') {
-        const loc = { lat: hit.latitude, lon: hit.longitude, city: hit.name || city }
-        setSetting('weatherGeo', loc)
-        return loc
-      }
-    } catch { /* fall through to default */ }
-    return { lat: 39.9042, lon: 116.4074, city }
+    const hit = await geocodeCity(city).catch(() => null)
+    if (hit) {
+      setSetting('weatherGeo', hit)
+      return hit
+    }
+    // the city could not be resolved — be honest about it instead of
+    // silently showing another city's weather
+    return { lat: 39.9042, lon: 116.4074, city, unresolved: true }
   }
-  // auto mode → IP geolocation (short timeout), then manual-city geocode, then Beijing
-  try {
-    const ip = await fetchJSON('https://ipapi.co/json/', 3500)
-    if (ip && typeof ip.latitude === 'number') {
-      const loc = { lat: ip.latitude, lon: ip.longitude, city: ip.city || ip.region || '' }
-      setSetting('weatherLocation', loc)
-      return loc
-    }
-  } catch { /* fall through */ }
-  const fallbackCity = getSetting('weatherCity', '北京') || '北京'
-  try {
-    const g = await fetchJSON(
-      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(fallbackCity)}&count=1&language=zh`
-    )
-    const hit = g?.results?.[0]
-    if (hit && typeof hit.latitude === 'number') {
-      return { lat: hit.latitude, lon: hit.longitude, city: hit.name || fallbackCity }
-    }
-  } catch { /* fall through */ }
+
+  // auto mode → IP geolocation, then the system time zone, then Beijing
+  const ip = await ipLocation()
+  if (ip) {
+    setSetting('weatherLocation', ip)
+    return ip
+  }
+  const tzCity = systemCity()
+  if (tzCity) {
+    const hit = await geocodeCity(tzCity).catch(() => null)
+    if (hit) return hit
+  }
+  const fallbackCity = (getSetting('weatherCity', '北京') || '北京').trim()
+  const fb = await geocodeCity(fallbackCity).catch(() => null)
+  if (fb) return fb
   return { lat: 39.9042, lon: 116.4074, city: fallbackCity }
 }
 
@@ -135,6 +193,17 @@ function deriveAlerts(current, daily) {
   return [...new Set(alerts)].slice(0, 4)
 }
 
+/**
+ * Drop every cached weather artefact — called when the city / mode / API
+ * settings change, otherwise the panel keeps showing the old location for
+ * up to 30 minutes.
+ */
+export function invalidateWeatherCache() {
+  cache = { at: 0, data: null }
+  try { setSetting('weatherCache', null) } catch { /* ignore */ }
+  try { setSetting('weatherGeo', null) } catch { /* ignore */ }
+}
+
 export async function getWeather() {
   const lang = 'zh'
   if (cache.data && Date.now() - cache.at < TTL) return cache.data
@@ -180,6 +249,7 @@ export async function getWeather() {
       ok: true,
       fetchedAt: Date.now(),
       city: loc.city,
+      unresolved: !!loc.unresolved,
       current: {
         temp: raw.current?.temperature_2m,
         feels: raw.current?.apparent_temperature,

@@ -1,7 +1,7 @@
 {
   "name": "todo-menubar",
   "productName": "Tomatodo",
-  "version": "2.3.9",
+  "version": "2.4.0",
   "description": "A local to-do app inspired by Microsoft To Do's feature set, with a first-class macOS menu bar (tray) experience",
   "main": "out/main/index.js",
   "author": "humbertcheung",

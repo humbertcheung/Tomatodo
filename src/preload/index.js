@@ -72,7 +72,8 @@ contextBridge.exposeInMainWorld('api', {
     reset: (mode) => ipcRenderer.invoke('pomodoro:reset', mode)
   },
   weather: {
-    get: () => ipcRenderer.invoke('weather:get')
+    get: () => ipcRenderer.invoke('weather:get'),
+    refresh: () => ipcRenderer.invoke('weather:refresh')
   },
   overview: () => ipcRenderer.invoke('app:overview'),
   iconUrl: () => ipcRenderer.invoke('app:iconUrl'),
@@ -108,6 +109,7 @@ contextBridge.exposeInMainWorld('api', {
   onThemeChanged: on('theme:changed'),
   onPomodoroTick: on('pomodoro:tick'),
   onQuickShow: on('quick:show'),
+  onWeatherChanged: on('weather:changed'),
   // quick panel surface
   quickData: () => ipcRenderer.invoke('quick:data'),
   quickAdd: (p) => ipcRenderer.invoke('tray:quickAdd', p),

@@ -5,7 +5,7 @@ import { t } from '../i18n'
 import TaskRow from './TaskRow.vue'
 import Illustrations from './Illustrations.vue'
 import WeatherPanel from './WeatherPanel.vue'
-import { Sun, ArrowUpDown, Rows3, MoreHorizontal, Trash2, CheckCircle2, CircleDashed } from 'lucide-vue-next'
+import { Sun, ArrowUpDown, Rows3, MoreHorizontal, Trash2, CheckCircle2, CircleDashed, CalendarDays, Bell } from 'lucide-vue-next'
 
 const newInput = ref('')
 const inputFocused = ref(false)
@@ -20,6 +20,10 @@ const canToggleCompleted = computed(() => ['myday', 'important', 'planned', 'all
 const viewTitle = computed(() => t(`smart.${state.view.id}`))
 
 const activeTasks = computed(() => state.tasks.filter((x) => x.status === 'notCompleted'))
+// tasks without a due date / reminder are not part of the "planned" view —
+// tell the user instead of letting them vanish silently
+const unplannedCount = computed(() =>
+  state.tasks.filter((x) => x.status !== 'completed' && !x.due_date && !x.reminder_date).length)
 const completedTasks = computed(() => state.tasks.filter((x) => x.status === 'completed'))
 const completedOpen = ref(false)
 
@@ -38,8 +42,9 @@ const viewTotal = computed(() => {
   if (isOpenView.value) return activeTasks.value.length
   return activeTasks.value.length + completedTasks.value.length
 })
-// the ⋯ menu only makes sense where at least one item applies
-const showMore = computed(() => canToggleCompleted.value || completedTasks.value.length > 0)
+// The ⋯ menu only ever offers "clear completed", so it may only appear
+// when there IS something to clear — otherwise it opens an empty popover.
+const showMore = computed(() => completedTasks.value.length > 0)
 
 const groupMode = ref(localStorage.getItem('groupMode') || 'none')
 const sortState = ref(state.settings.allSort || { sort_type: 'position', sort_dir: 'asc' })
@@ -108,6 +113,12 @@ const dateLabel = computed(() => {
   return new Date().toLocaleDateString(lang, { weekday: 'long', month: 'long', day: 'numeric' })
 })
 
+// The "已计划" view is defined by having a due date / reminder, so a task
+// created here must carry one — otherwise it silently falls out of the view.
+const isPlanned = computed(() => state.view.kind === 'smart' && state.view.id === 'planned')
+const newDue = ref(localYMD())
+const newReminder = ref('')
+
 async function submitNew(e) {
   if (e && (e.isComposing || e.keyCode === 229)) return // IME composition Enter
   const subject = newInput.value.trim()
@@ -115,6 +126,15 @@ async function submitNew(e) {
   newInput.value = ''
   const payload = { subject }
   if (isMyDay.value) payload.my_day_date = localYMD()
+  if (isPlanned.value) {
+    payload.due_date = newDue.value || localYMD()
+    if (newReminder.value) {
+      // the reminder is stored as an ISO timestamp on the chosen day
+      const [hh, mm] = newReminder.value.split(':').map(Number)
+      const [yy, mo, dd] = (newDue.value || localYMD()).split('-').map(Number)
+      payload.reminder_date = new Date(yy, mo - 1, dd, hh || 0, mm || 0, 0).toISOString()
+    }
+  }
   await createTask(payload)
 }
 
@@ -214,13 +234,24 @@ onBeforeUnmount(() => document.removeEventListener('click', closePop))
       <input
         v-model="newInput"
         class="add-input"
-        :placeholder="isMyDay ? t('add.placeholderMyDay') : t('add.placeholder')"
+        :placeholder="isMyDay ? t('add.placeholderMyDay') : (isPlanned ? t('add.placeholderPlanned') : t('add.placeholder'))"
         @keydown.enter="submitNew"
         @compositionend="() => {}"
         @focus="inputFocused = true"
         @blur="inputFocused = false"
       />
       <span v-if="inputFocused && newInput" class="add-hint">{{ t('add.hint') }}</span>
+      <!-- the planned view needs a date, so it gets the date fields inline -->
+      <template v-if="isPlanned">
+        <label class="add-field">
+          <CalendarDays :size="13" />
+          <input v-model="newDue" type="date" class="add-date" :aria-label="t('task.due')" />
+        </label>
+        <label class="add-field">
+          <Bell :size="13" />
+          <input v-model="newReminder" type="time" class="add-time" :aria-label="t('task.reminder')" />
+        </label>
+      </template>
     </div>
 
     <!-- task list -->
@@ -291,6 +322,9 @@ onBeforeUnmount(() => document.removeEventListener('click', closePop))
             @toggle="toggleTaskComplete(task)"
           />
         </div>
+      </div>
+      <div v-if="isPlanned && unplannedCount" class="unplanned-hint">
+        {{ t('view.unplannedHint', { n: unplannedCount }) }}
       </div>
       <div class="scroll-pad"></div>
     </div>
@@ -453,6 +487,33 @@ onBeforeUnmount(() => document.removeEventListener('click', closePop))
 }
 .add-input::placeholder { color: var(--fg-tertiary); }
 .add-hint { font-size: var(--fs-xs); color: var(--fg-tertiary); white-space: nowrap; }
+.unplanned-hint {
+  font-size: var(--fs-xs);
+  color: var(--fg-tertiary);
+  padding: 10px 8px 2px;
+  text-align: center;
+}
+/* date / reminder pickers on the planned view's add bar */
+.add-field {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--fg-secondary);
+  flex-shrink: 0;
+}
+.add-field:focus-within { border-color: var(--accent); color: var(--accent); }
+.add-date, .add-time {
+  border: none; outline: none; background: transparent;
+  font-size: var(--fs-xs); color: var(--fg-text);
+  font-family: inherit;
+  width: 108px;
+}
+.add-time { width: 78px; }
+.add-date::-webkit-calendar-picker-indicator,
+.add-time::-webkit-calendar-picker-indicator { opacity: 0.45; cursor: pointer; }
+.add-field:hover ::-webkit-calendar-picker-indicator { opacity: 0.8; }
 
 .tasks-scroll {
   flex: 1;

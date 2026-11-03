@@ -15,16 +15,30 @@ const view = ref('today') // 'today' | 'week'
 const chartEl = ref(null)
 let chart = null
 let ro = null
+let offWeather = null
 
-onMounted(async () => {
-  data.value = await window.api.weather.get()
+async function loadWeather() {
+  try {
+    data.value = await window.api.weather.get()
+  } catch {
+    data.value = null
+    return
+  }
   await nextTick()
   mountChart()
+  chart?.resize()
+}
+
+onMounted(async () => {
+  await loadWeather()
   ro = new ResizeObserver(() => chart?.resize())
   if (chartEl.value) ro.observe(chartEl.value)
+  // the city / mode / API may have changed in the settings — refetch
+  offWeather = window.api.onWeatherChanged?.(() => { loadWeather() })
 })
 onBeforeUnmount(() => {
   ro?.disconnect()
+  offWeather?.()
   chart?.dispose()
   chart = null
 })
@@ -198,7 +212,7 @@ const fmtT = (v) => (v === null || v === undefined ? '–' : `${Math.round(v)}°
       <div class="wx-now">
         <span class="wx-temp">{{ fmtT(data.current.temp) }}</span>
         <span class="wx-desc">{{ data.current.desc }}</span>
-        <span class="wx-meta">{{ data.city }} • 温度{{ Math.round(data.days?.[0]?.min ?? 0) }}℃~{{ Math.round(data.days?.[0]?.max ?? 0) }}℃ • 体感 {{ fmtT(data.current.feels) }} • 湿度 {{ data.current.humidity }}%</span>
+        <span class="wx-meta" :class="{ warn: data.unresolved }">{{ data.unresolved ? (data.city + " · 城市未找到") : data.city }} • 温度{{ Math.round(data.days?.[0]?.min ?? 0) }}℃~{{ Math.round(data.days?.[0]?.max ?? 0) }}℃ • 体感 {{ fmtT(data.current.feels) }} • 湿度 {{ data.current.humidity }}%</span>
       </div>
 
       <!-- toggle -->
@@ -278,6 +292,7 @@ html:not(.win-focused) .wx-loading-text {
 .wx-now { display: flex; align-items: center; gap: 7px; min-width: 0; padding-right: 46px; }
 .wx-temp { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
 .wx-desc { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.wx-meta.warn { color: #ffd166; }
 .wx-meta {
   margin-left: auto;
   font-size: 10px;

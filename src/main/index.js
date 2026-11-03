@@ -12,7 +12,7 @@ import { startReminders, stopReminders } from './reminders'
 import { setMiniLang } from '@shared/i18n-mini'
 import { deriveNextOccurrence } from '@shared/recurrence'
 import { getPomodoro, startPomodoro, pausePomodoro, resetPomodoro, restorePomodoro, setPomodoroTickHook } from './pomodoro'
-import { getWeather } from './weather'
+import { getWeather, invalidateWeatherCache } from './weather'
 import { htmlToRtf, htmlToText, rtfToHtml } from '@shared/rtf'
 import { backupStatus, backupStatusAfter, runBackup, openBackupDir, openNotesDir, startBackupScheduler } from './backup'
 
@@ -604,6 +604,13 @@ function localYMD(offset = 0) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+/** send an event to every open renderer window */
+function broadcast(channel, payload) {
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w.isDestroyed()) w.webContents.send(channel, payload)
+  }
+}
+
 function broadcastChanged() {
   refreshTrayMenu()
   updateTrayTitle()
@@ -717,6 +724,11 @@ function registerIpc() {
   h('settings:get', (k) => db.getSetting(k))
   h('settings:set', (k, v) => {
     db.setSetting(k, v)
+    // a new location / API must not be masked by the cached payload
+    if (['weatherCity', 'weatherMode', 'weatherApiBase', 'weatherApiKey'].includes(k)) {
+      invalidateWeatherCache()
+      broadcast('weather:changed', { reason: k })
+    }
     if (k === 'language') {
       const sys = nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
       setMiniLang(v === 'en' ? 'en' : v === 'system' ? undefined : v)
@@ -824,6 +836,12 @@ function registerIpc() {
   h('pomodoro:reset', (mode) => { updateTrayTitle(); return resetPomodoro(mode) })
 
   // weather
+  h('weather:refresh', async () => {
+    invalidateWeatherCache()
+    const data = await getWeather()
+    broadcast('weather:changed', { reason: 'refresh' })
+    return data
+  })
   h('weather:get', () => getWeather())
 
   // app icon as renderable URL (brand logo / about page)

@@ -11,7 +11,7 @@ const messages = {
       all: '所有任务',
       completed: '已完成'
     },
-    add: { placeholder: '添加任务', placeholderMyDay: '添加到“我的一天”', hint: '回车保存 · 支持“明天 3点”等日期识别' },
+    add: { placeholder: '添加任务', placeholderMyDay: '添加到“我的一天”', placeholderPlanned: '添加到“已计划”（可设截止日与提醒）', hint: '回车保存 · 支持“明天 3点”等日期识别' },
     task: {
       steps: '步骤',
       addStep: '添加步骤',
@@ -24,6 +24,7 @@ const messages = {
       today: '今天',
       tomorrow: '明天',
       nextWeek: '下周',
+      unplannedHint: '另有 {n} 个任务没有计划日期，未显示在此处',
       pickDate: '选择日期',
       noDue: '移除截止日期',
       overdue: '已逾期',
@@ -246,10 +247,11 @@ const messages = {
       all: 'All Tasks',
       completed: 'Completed'
     },
-    add: { placeholder: 'Add a task', placeholderMyDay: 'Add to My Day', hint: 'Enter to save · try “tomorrow 3pm”' },
+    add: { placeholder: 'Add a task', placeholderMyDay: 'Add to My Day', placeholderPlanned: 'Add to Planned (due date & reminder)', hint: 'Enter to save · try “tomorrow 3pm”' },
     task: {
       steps: 'Steps', addStep: 'Add step', note: 'Note', due: 'Due date', reminder: 'Reminder', repeat: 'Repeat',
       myday: 'My Day', important: 'Important', today: 'Today', tomorrow: 'Tomorrow', nextWeek: 'Next week',
+      unplannedHint: 'Another {n} task(s) have no due date and are not shown here',
       pickDate: 'Pick a date', noDue: 'Remove due date', overdue: 'Overdue', dueToday: 'Due today', dueTomorrow: 'Due tomorrow',
       completed: 'Completed on', created: 'Created', none: 'None',
       daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly', yearly: 'Yearly',

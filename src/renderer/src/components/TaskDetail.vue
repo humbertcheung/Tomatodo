@@ -466,7 +466,7 @@ const completedLabel = computed(() => {
 .attr-value { margin-left: auto; color: var(--fg-tertiary); font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .attr-value.set { color: var(--accent); font-weight: 500; }
 .attr-chev { color: var(--fg-disabled); flex-shrink: 0; }
-.side-pop { right: 4px; top: 34px; width: 224px; z-index: 30; }
+.side-pop { right: 4px; top: 34px; width: 224px; z-index: 120; }
 .date-input {
   width: calc(100% - 12px);
   margin: 4px 6px;
