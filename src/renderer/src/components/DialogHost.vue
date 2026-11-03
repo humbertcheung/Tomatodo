@@ -21,7 +21,11 @@ function submit() {
 
 <template>
   <Teleport to="body">
-    <div v-if="state.dialog" class="modal-backdrop" @click.self="resolveDialog(null)">
+    <!-- Close on a press that BEGINS on the backdrop. With @click.self a
+         drag that started inside the text field and ended on the backdrop
+         produced a click whose target was the backdrop itself — the dialog
+         closed while the user was selecting text. -->
+    <div v-if="state.dialog" class="modal-backdrop dialog-layer" @mousedown.self="resolveDialog(null)">
       <div class="modal dlg" role="dialog" :aria-label="state.dialog.title">
         <div class="dlg-head">
           <span v-if="state.dialog.danger" class="dlg-warn"><TriangleAlert :size="18" /></span>
@@ -54,6 +58,9 @@ function submit() {
 </template>
 
 <style scoped>
+/* the dialog layer floats above every other modal (the settings dialog
+   uses .modal-backdrop at z-index 400) */
+.dialog-layer { z-index: 500; }
 .dlg { width: 360px; padding: 22px; gap: 0; }
 .dlg-head { display: flex; align-items: center; gap: 10px; }
 .dlg-head h3 { font-size: var(--fs-md); font-weight: 600; }

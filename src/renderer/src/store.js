@@ -43,7 +43,7 @@ export async function initStore() {
   })
   window.api.onPomodoroTick((p) => { Object.assign(state.pomodoro, p) })
   state.pomodoro = await window.api.pomodoro.get()
-  window.api.onOpenNote((id) => { state.mode = 'note'; state.selectedNoteId = id; state.selectedTaskId = null })
+  window.api.onOpenNote((id) => { openNoteById(id) })
 }
 
 function applyLanguage() {
@@ -101,6 +101,23 @@ export function openTask(id) {
   } else {
     state.selectedTaskId = id
   }
+}
+
+/**
+ * Show / hide one of the quick panel's modules.
+ *
+ * The flags live in ONE settings key ('quickModules'), so the switches and
+ * the panel can never disagree. The merge happens against the CURRENT store
+ * value and the store is updated SYNCHRONOUSLY — otherwise two switches
+ * toggled in quick succession overwrite each other, and the re-render can
+ * flip a switch back on before the write lands.
+ */
+export async function setQuickModule(key, on) {
+  const cur = { ...(state.settings.quickModules || {}) }
+  cur[key] = !!on
+  state.settings = { ...state.settings, quickModules: cur }
+  await window.api.settings.set('quickModules', cur)
+  return cur
 }
 
 export async function setSetting(key, value) {
@@ -179,6 +196,29 @@ export async function refreshNotes() {
   const rows = await window.api.notes.list({ q: filter || null })
   if (token !== noteQueryToken || state.mode !== 'note') return
   state.notes = rows
+}
+
+/**
+ * Open a note: switch to the note mode, make sure the notes are actually
+ * loaded (refreshNotes() is a no-op outside the note mode) and then raise
+ * the sticky popup for it.
+ */
+let openNoteToken = 0
+
+export async function openNoteById(id) {
+  // a token makes concurrent calls safe: only the last one may raise the
+  // popup, so a superseded call cannot open an empty note
+  const token = ++openNoteToken
+  state.mode = 'note'
+  state.selectedTaskId = null
+  if (!state.notes.some((n) => n.id === id)) {
+    await refreshNotes()
+  }
+  if (token !== openNoteToken) return
+  // the notes must be in place BEFORE the popup id is raised — otherwise the
+  // popup renders before the note it refers to exists
+  state.selectedNoteId = id
+  state.notePopupId = id
 }
 
 export function switchMode(mode) {

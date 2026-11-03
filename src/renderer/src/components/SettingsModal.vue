@@ -1,8 +1,8 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { state, setSetting, toast } from '../store'
+import { state, setSetting, toast, askConfirm, refreshTasks, refreshNotes, setQuickModule } from '../store'
 import { t } from '../i18n'
-import { X, Palette, SlidersHorizontal, PanelTop, BellRing, Database, Info, Download, Image, Timer, ListChecks, CloudSun, Archive, FolderOpen } from 'lucide-vue-next'
+import { X, Palette, SlidersHorizontal, PanelTop, BellRing, Database, Info, Download, Image, Timer, ListChecks, CloudSun, Archive, FolderOpen, Upload } from 'lucide-vue-next'
 
 const emit = defineEmits(['close'])
 // injected from package.json at build time — always matches the app version
@@ -11,12 +11,12 @@ const tab = ref('appearance')
 const loginItem = ref(false)
 
 // quick panel section order (drag to reorder)
-const SECTION_NAMES = { myday: '我的一天', due: '今日待办', notes: '便签' }
-const sectionOrder = ref(['myday', 'due', 'notes'])
+const SECTION_NAMES = { planned: '已计划', notes: '便签' }
+const sectionOrder = ref(['planned', 'notes'])
 let dragIdx = -1
 onMounted(async () => {
   const saved = await window.api.settings.get('quickSectionOrder')
-  if (Array.isArray(saved) && saved.length === 3) sectionOrder.value = saved
+  if (Array.isArray(saved) && saved.length === 2) sectionOrder.value = saved
   const quick = document.querySelector('.qpanel') // warm reference (no-op)
   void quick
 })
@@ -27,6 +27,7 @@ function onDrop(e, toIdx) {
   arr.splice(toIdx, 0, moved)
   sectionOrder.value = arr
   dragIdx = -1
+  // persisted in the DB — the quick panel picks it up immediately
   setSetting('quickSectionOrder', arr)
   toast(t('settings.saved'))
 }
@@ -84,6 +85,32 @@ async function onBackupNow() {
   }
 }
 async function onOpenBackupDir() { await window.api.backupOpen() }
+
+/** show/hide one of the quick panel's modules */
+
+// restore a backup archive (replaces the current data)
+const restoring = ref(false)
+async function onRestore() {
+  const ok = await askConfirm({
+    title: t('settings.restoreConfirmTitle'),
+    message: t('settings.restoreConfirmMessage')
+  })
+  if (!ok) return
+  restoring.value = true
+  try {
+    const r = await window.api.backupRestore()
+    if (r?.canceled) return
+    if (r?.ok) {
+      toast(t('settings.restoreDone', { tasks: r.tasks, notes: r.notes }))
+      await refreshTasks()
+      await refreshNotes()
+    } else {
+      toast(r?.error || t('settings.restoreFailed'))
+    }
+  } finally {
+    restoring.value = false
+  }
+}
 async function onOpenNotesDir() { await window.api.notesOpenDir() }
 
 function fmtBackupSize(bytes) {
@@ -129,35 +156,81 @@ const BG_PRESETS = [
 ]
 
 // accelerator ⇄ display string per platform (⌘ ⇧ ⌥ on macOS, Ctrl+Shift+Alt on Win/Linux)
+/**
+ * Render an Electron accelerator for display: ⌘⇧T on macOS, Ctrl+Shift+T
+ * elsewhere. The separator is NOT kept between symbols — keeping it made
+ * every round-trip add another '+' ("CommandOrControl++Shift++T"), which
+ * Electron cannot register, so the shortcut silently died.
+ */
 function fmtAccelerator(acc) {
-  let s = String(acc || '')
-  s = s.replaceAll('CommandOrControl', isMac ? '⌘' : 'Ctrl')
-  s = s.replaceAll('Command', isMac ? '⌘' : 'Win')
-  s = s.replaceAll('Control', 'Ctrl')
-  s = s.replaceAll('CmdOrCtrl', isMac ? '⌘' : 'Ctrl')
-  s = s.replaceAll('Shift', '⇧')
-  s = s.replaceAll('Alt', isMac ? '⌥' : 'Alt')
-  s = s.replaceAll('Meta', isMac ? '⌘' : 'Win')
-  return s
-}
-function parseAccelerator(display) {
-  let s = String(display || '').trim()
-  s = s.replaceAll('⌘', isMac ? 'CommandOrControl+' : 'Meta+')
-  s = s.replaceAll('⇧', 'Shift+')
-  s = s.replaceAll('⌥', 'Alt+')
-  s = s.replaceAll('Ctrl', 'Control')
-  return s.replace(/\++$/, '')
+  const parts = String(acc || '').split('+').filter(Boolean)
+  const syms = parts.map((p) => {
+    const k = p.toLowerCase()
+    if (k === 'commandorcontrol') return isMac ? '⌘' : 'Ctrl'
+    if (k === 'command' || k === 'meta' || k === 'super') return isMac ? '⌘' : 'Win'
+    if (k === 'control' || k === 'ctrl') return isMac ? '⌃' : 'Ctrl'
+    if (k === 'alt' || k === 'option') return isMac ? '⌥' : 'Alt'
+    if (k === 'shift') return isMac ? '⇧' : 'Shift'
+    return p.length === 1 ? p.toUpperCase() : p
+  })
+  return syms.join(isMac ? '' : '+')
 }
 
-const shortcutDisplay = ref(fmtAccelerator(state.settings.globalShortcut ?? 'CommandOrControl+Shift+T'))
+/** turn a display string back into an Electron accelerator */
+function parseAccelerator(display) {
+  const sym = { '⌘': 'CommandOrControl', '⌃': 'Control', '⌥': 'Alt', '⇧': 'Shift' }
+  const out = []
+  for (const ch of String(display || '').trim()) {
+    if (sym[ch]) out.push(sym[ch])
+    else if (ch !== '+') out.push(ch.toUpperCase())
+  }
+  return out.join('+')
+}
+
+const DEFAULT_SHORTCUT = 'CommandOrControl+Alt+T'
+const shortcutDisplay = ref(fmtAccelerator(state.settings.globalShortcut ?? DEFAULT_SHORTCUT))
+const shortcutCapturing = ref(false)
 
 async function commitShortcut() {
-  const acc = parseAccelerator(shortcutDisplay.value)
-  if (acc && acc.length > 1) {
-    await setSetting('globalShortcut', acc)
-    toast(t('settings.saved'))
+  // the accelerator is captured from real key presses; this only re-syncs
+  // the display after a change elsewhere
+  shortcutDisplay.value = fmtAccelerator(state.settings.globalShortcut ?? DEFAULT_SHORTCUT)
+}
+
+/** capture the real key combination instead of asking the user to type it */
+function captureShortcut(e) {
+  e.preventDefault()
+  e.stopPropagation()
+  // the user is still typing the combination — only the modifier keys are
+  // not enough to make a shortcut
+  if (['Meta', 'Control', 'Alt', 'Shift', 'CapsLock', 'Dead'].includes(e.key)) {
+    shortcutDisplay.value = fmtAccelerator(buildAccelerator(e))
+    return
   }
-  shortcutDisplay.value = fmtAccelerator(state.settings.globalShortcut ?? 'CommandOrControl+Shift+T')
+  const acc = buildAccelerator(e)
+  if (!acc) return
+  shortcutDisplay.value = fmtAccelerator(acc)
+  shortcutCapturing.value = false
+  setSetting('globalShortcut', acc)
+  toast(t('settings.saved'))
+}
+
+/** build an Electron accelerator from a keyboard event */
+function buildAccelerator(e) {
+  const parts = []
+  if (e.metaKey) parts.push('Command')
+  if (e.ctrlKey) parts.push('Control')
+  if (e.altKey) parts.push('Alt')
+  if (e.shiftKey) parts.push('Shift')
+  let key = e.key
+  if (key === ' ') key = 'Space'
+  else if (key.length === 1) key = key.toUpperCase()
+  else if (!/^F\d{1,2}$/.test(key) && !['Space', 'Tab', 'Backspace', 'Delete', 'Insert', 'Home', 'End', 'PageUp', 'PageDown', 'Up', 'Down', 'Left', 'Right', 'Escape', 'Enter', 'Plus', 'Return'].includes(key)) {
+    return null
+  }
+  if (!parts.length) return null
+  parts.push(key)
+  return parts.join('+')
 }
 
 const tabs = [
@@ -306,6 +379,21 @@ const bgPreview = computed(() => {
                 </div>
               </div>
               <div class="set-row wrap">
+                <label>{{ t('settings.quickModules') }}</label>
+                <div class="btn-row">
+                  <label class="switch">
+                    <input type="checkbox" :checked="state.settings.quickModules?.planned !== false" @change="setQuickModule('planned', $event.target.checked)" />
+                    <span class="switch-track"><span class="switch-knob"></span></span>
+                    <span class="switch-label">{{ t('quick.planned') }}</span>
+                  </label>
+                  <label class="switch">
+                    <input type="checkbox" :checked="state.settings.quickModules?.notes !== false" @change="setQuickModule('notes', $event.target.checked)" />
+                    <span class="switch-track"><span class="switch-knob"></span></span>
+                    <span class="switch-label">{{ t('quick.notes') }}</span>
+                  </label>
+                </div>
+              </div>
+              <div class="set-row wrap">
                 <label>{{ t('settings.sectionOrder') }}</label>
                 <div class="order-list">
                   <div
@@ -328,11 +416,12 @@ const bgPreview = computed(() => {
                   v-model="shortcutDisplay"
                   class="set-input shortcut"
                   spellcheck="false"
-                  @keydown.enter="commitShortcut"
+                  :value="shortcutDisplay"
+                  @keydown="captureShortcut"
                   @blur="commitShortcut"
                 />
                 <div class="set-hint full">
-                  {{ isMac ? '⌘⇧T · ⌘⇧N …' : 'Ctrl+Shift+T · Ctrl+Shift+N …' }}
+                  {{ isMac ? '点击输入框后直接按下组合键，例如 ⌥⌘T' : '点击输入框后直接按下组合键，例如 Ctrl+Alt+T' }}
                 </div>
               </div>
             </template>
@@ -459,6 +548,15 @@ const bgPreview = computed(() => {
                 <div class="btn-row">
                   <button class="btn ghost" @click="onOpenNotesDir"><FolderOpen :size="15" /> {{ t('settings.notesOpenDir') }}</button>
                 </div>
+              </div>
+              <div class="set-row wrap">
+                <label>{{ t('settings.restore') }}</label>
+                <div class="btn-row">
+                  <button class="btn" :disabled="restoring" @click="onRestore">
+                    <Upload :size="15" /> {{ restoring ? t('settings.restoring') : t('settings.restoreBtn') }}
+                  </button>
+                </div>
+                <div class="set-hint full">{{ t('settings.restoreHint') }}</div>
               </div>
             </template>
 

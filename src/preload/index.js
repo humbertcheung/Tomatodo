@@ -110,12 +110,14 @@ contextBridge.exposeInMainWorld('api', {
   onPomodoroTick: on('pomodoro:tick'),
   onQuickShow: on('quick:show'),
   onWeatherChanged: on('weather:changed'),
+  onQuickSectionOrder: on('quick:sectionOrder'),
   // quick panel surface
   quickData: () => ipcRenderer.invoke('quick:data'),
   quickAdd: (p) => ipcRenderer.invoke('tray:quickAdd', p),
   quickToggleDone: (id, done) => ipcRenderer.invoke('quick:toggleDone', id, done),
   quickAlwaysOnTop: (on) => ipcRenderer.invoke('quick:alwaysOnTop', on),
   quickIsAlwaysOnTop: () => ipcRenderer.invoke('quick:isAlwaysOnTop'),
+  quickOpenNote: (id) => ipcRenderer.invoke('quick:openNote', id),
   quickOpenMain: () => ipcRenderer.invoke('quick:openMain'),
   quickClose: () => ipcRenderer.invoke('quick:close'),
   // backup
@@ -123,5 +125,6 @@ contextBridge.exposeInMainWorld('api', {
   backupSettings: (p) => ipcRenderer.invoke('backup:settings', p),
   backupRun: () => ipcRenderer.invoke('backup:run'),
   backupOpen: () => ipcRenderer.invoke('backup:open'),
+  backupRestore: () => ipcRenderer.invoke('backup:restore'),
   notesOpenDir: () => ipcRenderer.invoke('notes:openDir')
 })

@@ -38,8 +38,11 @@ function openDriver(file) {
   }
 }
 
+let dbFile = null
+
 export function openDatabase(userDataDir) {
   const file = path.join(userDataDir, 'todo.db')
+  dbFile = file
   fs.mkdirSync(path.dirname(file), { recursive: true })
   const opened = openDriver(file)
   db = opened.db
@@ -604,6 +607,96 @@ export function setNoteTimestamps(id, created_at, updated_at) {
     id
   )
   return getNote(id)
+}
+
+/**
+ * Replace the current data with a backup snapshot.
+ * The snapshot holds the tasks (plus lists / steps / attachments) and the
+ * notes' metadata; the notes' RTF documents are handed in separately.
+ * @param {object} snapshot  parsed tasks.json
+ * @param {Map<string,Buffer>} noteFiles  RTF documents keyed by file name
+ */
+export function restoreSnapshot(snapshot, noteFiles = new Map()) {
+  const stats = { tasks: 0, notes: 0, files: 0 }
+
+  // --- wipe the current rows ---
+  run('DELETE FROM attachments')
+  run('DELETE FROM steps')
+  run('DELETE FROM tasks')
+  run('DELETE FROM notes')
+  run('DELETE FROM lists')
+  run('DELETE FROM groups')
+
+  // --- lists / groups ---
+  for (const g of snapshot.groups || []) {
+    run('INSERT OR REPLACE INTO groups (id, name, position, created_at) VALUES (?, ?, ?, ?)',
+      g.id, g.name || '', g.position ?? 0, g.created_at || new Date().toISOString())
+  }
+  for (const l of snapshot.lists || []) {
+    run('INSERT OR REPLACE INTO lists (id, name, position, show_completed, sort_type, sort_dir, theme, group_id, is_default, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      l.id, l.name || '', l.position ?? 0, l.show_completed ?? 1,
+      l.sort_type || 'position', l.sort_dir || 'asc', l.theme || 'blue',
+      l.group_id ?? null, l.is_default ?? 0, l.created_at || new Date().toISOString())
+  }
+
+  // --- tasks ---
+  for (const t of snapshot.tasks || []) {
+    run(`INSERT OR REPLACE INTO tasks (id, list_id, subject, note_html, status, importance,
+         due_date, due_has_time, reminder_date, recurrence_json, my_day_date, position,
+         completed_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      t.id, t.list_id || ensureInboxId(), t.subject || '', t.note_html || '',
+      t.status || 'notCompleted', t.importance || 'normal',
+      t.due_date ?? null, t.due_has_time ?? 0, t.reminder_date ?? null,
+      t.recurrence_json ?? null, t.my_day_date ?? null, t.position ?? 0,
+      t.completed_at ?? null, t.created_at || new Date().toISOString(),
+      t.updated_at || new Date().toISOString())
+    stats.tasks++
+  }
+
+  // --- steps / attachments ---
+  for (const st of snapshot.steps || []) {
+    run('INSERT OR REPLACE INTO steps (id, task_id, subject, position, completed, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      st.id, st.task_id, st.subject || '', st.position ?? 0, st.completed ?? 0, st.created_at || new Date().toISOString())
+  }
+  for (const at of snapshot.attachments || []) {
+    run('INSERT OR REPLACE INTO attachments (id, task_id, type, name, path_or_url, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      at.id, at.task_id, at.type || 'file', at.name || '', at.path_or_url || '', at.created_at || new Date().toISOString())
+  }
+
+  // --- notes (+ their RTF documents on disk) ---
+  const notesDir = path.join(dirOfDb(), 'notes')
+  try { fs.mkdirSync(notesDir, { recursive: true }) } catch { /* ignore */ }
+  // remove the documents of the previous data
+  try {
+    for (const f of fs.readdirSync(notesDir)) {
+      if (f.endsWith('.rtf')) fs.unlinkSync(path.join(notesDir, f))
+    }
+  } catch { /* no folder yet */ }
+
+  for (const n of snapshot.notes || []) {
+    const fileName = (n.file || '').split('/').pop() || (n.id + '.rtf')
+    const rtf = noteFiles.get(fileName)
+    let file = null
+    if (rtf) {
+      file = path.join(notesDir, fileName)
+      fs.writeFileSync(file, rtf)
+      stats.files++
+    }
+    run(`INSERT OR REPLACE INTO notes (id, title, content, color, pinned, preview, file, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      n.id, n.title || '', n.content || '', n.color || 'yellow',
+      n.pinned ?? 0, n.preview || '', file,
+      n.created_at || new Date().toISOString(), n.updated_at || new Date().toISOString())
+    stats.notes++
+  }
+
+  return stats
+}
+
+/** the folder that holds todo.db (the app's userData directory) */
+function dirOfDb() {
+  return dbFile ? path.dirname(dbFile) : path.dirname(path.dirname(process.execPath))
 }
 
 export function notesCount() {

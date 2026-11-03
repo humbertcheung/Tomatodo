@@ -1,0 +1,247 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		AA00010000000000000000000000 /* WidgetShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000000000000000000000000 /* WidgetShared.swift */; };
+		AA00030000000000000000000000 /* TomatodoWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00020000000000000000000000 /* TomatodoWidget.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		AA00000000000000000000000000 /* WidgetShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TomatodoWidget/WidgetShared.swift; sourceTree = "<group>"; };
+		AA00020000000000000000000000 /* TomatodoWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TomatodoWidget/TomatodoWidget.swift; sourceTree = "<group>"; };
+		AA00040000000000000000000000 /* TomatodoWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TomatodoWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA00180000000000000000000000 /* TomatodoWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TomatodoWidget.entitlements; sourceTree = "<group>"; };
+		AA00190000000000000000000000 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		AA00090000000000000000000000 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		AA00100000000000000000000000 = {
+			isa = PBXGroup;
+			children = (
+				AA00000000000000000000000000 /* WidgetShared.swift */,
+				AA00020000000000000000000000 /* TomatodoWidget.swift */,
+				AA00180000000000000000000000 /* TomatodoWidget.entitlements */,
+				AA00190000000000000000000000 /* Info.plist */,
+				AA00110000000000000000000000 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		AA00110000000000000000000000 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				AA00040000000000000000000000 /* TomatodoWidget.appex */,
+			);
+			path = TomatodoWidget;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		AA00050000000000000000000000 /* TomatodoWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA00130000000000000000000000 /* Build configuration list for PBXNativeTarget "TomatodoWidget" */;
+			buildPhases = (
+				AA00070000000000000000000000 /* Sources */,
+				AA00090000000000000000000000 /* Frameworks */,
+				AA00080000000000000000000000 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = TomatodoWidget;
+			productName = TomatodoWidget;
+			productReference = AA00040000000000000000000000 /* TomatodoWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		AA00060000000000000000000000 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					AA00050000000000000000000000 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = AA00120000000000000000000000 /* Build configuration list for PBXProject "TomatodoWidget" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+				"zh-Hans",
+			);
+			mainGroup = AA00100000000000000000000000;
+			productRefGroup = AA00110000000000000000000000 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				AA00050000000000000000000000 /* TomatodoWidget */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		AA00080000000000000000000000 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		AA00070000000000000000000000 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA00010000000000000000000000 /* WidgetShared.swift in Sources */,
+				AA00030000000000000000000000 /* TomatodoWidget.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		AA00140000000000000000000000 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		AA00150000000000000000000000 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		AA00160000000000000000000000 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TomatodoWidget/TomatodoWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2.4.4;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TomatodoWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Tomatodo;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Applications",
+				);
+				MARKETING_VERSION = 2.4.4;
+				PRODUCT_BUNDLE_IDENTIFIER = cc.humbert.todo-menubar.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Debug;
+		};
+		AA00170000000000000000000000 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TomatodoWidget/TomatodoWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2.4.4;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TomatodoWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Tomatodo;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Applications",
+				);
+				MARKETING_VERSION = 2.4.4;
+				PRODUCT_BUNDLE_IDENTIFIER = cc.humbert.todo-menubar.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		AA00120000000000000000000000 /* Build configuration list for PBXProject "TomatodoWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA00140000000000000000000000 /* Debug */,
+				AA00150000000000000000000000 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA00130000000000000000000000 /* Build configuration list for PBXNativeTarget "TomatodoWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA00160000000000000000000000 /* Debug */,
+				AA00170000000000000000000000 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = AA00060000000000000000000000 /* Project object */;
+}

@@ -5,33 +5,62 @@ import { parseSmartDate } from '@shared/nlp'
 import { htmlToText } from '@shared/rtf'
 import {
   Plus, Check, ArrowRight, Sun, CalendarDays, ListChecks, StickyNote, Search, Pin,
-  ChevronRight, Star, ExternalLink
+  ChevronRight, Star, ExternalLink, Clock, Flame
 } from 'lucide-vue-next'
 
 const tomatoLogo = ref(null)
 const inputEl = ref(null)
 const subject = ref('')
-const sectionOrder = ref(['myday', 'due', 'notes'])
+/* the panel shows two modules: 已计划 (planned) and 便签 (notes) */
+const sectionOrder = ref(['planned', 'notes'])
+const showPlanned = ref(true)
+const showNotes = ref(true)
 const data = ref(null)
 const kind = ref('todo')            // capture target: 'todo' | 'note'
 const parsed = ref(null)
 
+/* rows the user expanded — id → true */
+const expanded = ref(new Set())
+
+const SECTION_NAMES = { planned: '已计划', notes: '便签' }
+
+async function loadOrder() {
+  // the order AND the visibility flags live in the settings — read both
+  try {
+    const [flags, saved] = await Promise.all([
+      window.api.settings.get('quickModules'),
+      window.api.settings.get('quickSectionOrder')
+    ])
+    showPlanned.value = flags?.planned !== false
+    showNotes.value = flags?.notes !== false
+    if (Array.isArray(saved) && saved.length) {
+      // keep only the sections we actually render, in the saved order
+      const known = ['planned', 'notes']
+      const order = saved.filter((k) => known.includes(k))
+      for (const k of known) if (!order.includes(k)) order.push(k)
+      sectionOrder.value = order
+    }
+  } catch {
+    sectionOrder.value = ['planned', 'notes']
+  }
+}
+
 onMounted(async () => {
   try { tomatoLogo.value = await window.api.iconUrl() } catch { tomatoLogo.value = null }
   window.__quickLogo = tomatoLogo.value
+  await loadOrder()
   data.value = await window.api.quickData()
-  sectionOrder.value = await window.api.settings.get('quickSectionOrder') || ['myday', 'due', 'notes']
   document.documentElement.dataset.theme =
     window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   window.api.onThemeChanged((mode) => { document.documentElement.dataset.theme = mode })
   // re-read order + data on every panel invocation (settings may have changed)
   window.api.onQuickShow(async () => {
-    try {
-      sectionOrder.value = (await window.api.settings.get('quickSectionOrder')) || ['myday', 'due', 'notes']
-    } catch { sectionOrder.value = ['myday', 'due', 'notes'] }
+    await loadOrder()
     data.value = await window.api.quickData()
     focusInput()
   })
+  // the order changed in the settings → apply it right away
+  window.api.onQuickSectionOrder?.(() => { loadOrder() })
   focusInput()
 })
 
@@ -56,23 +85,54 @@ function secStyle(key) {
   return { order: sectionOrder.value.indexOf(key) }
 }
 
-// 置顶: keep the panel above other windows
-const pinned = ref(false)
-async function togglePin() {
-  pinned.value = await window.api.quickAlwaysOnTop(!pinned.value)
-}
-onMounted(async () => {
-  try { pinned.value = await window.api.quickIsAlwaysOnTop() } catch { pinned.value = false }
-})
-
 const filteredNotes = computed(() => {
   if (!data.value) return []
   const q = noteFilter.value.trim().toLowerCase()
   if (!q) return data.value.notes
   return data.value.notes.filter((n) =>
-    (n.title || '').toLowerCase().includes(q) || (n.content || '').toLowerCase().includes(q)
-  )
+    (n.title || '').toLowerCase().includes(q) || (n.preview || '').toLowerCase().includes(q))
 })
+
+/* ---------- planned rows ---------- */
+
+function isOpen(id) { return expanded.value.has(id) }
+function toggleOpen(id) {
+  const next = new Set(expanded.value)
+  if (next.has(id)) next.delete(id); else next.add(id)
+  expanded.value = next
+}
+
+const lang = computed(() => (navigator.language.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en-US'))
+
+function fmtDue(task) {
+  if (!task.due_date && !task.reminder_date) return t('quick.noDate')
+  const iso = task.due_date || task.reminder_date
+  const d = new Date(iso + 'T00:00:00')
+  if (Number.isNaN(d.getTime())) return iso
+  const today = new Date()
+  const ymd = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`
+  const diff = Math.round((new Date(ymd(d)) - new Date(ymd(today))) / 86400000)
+  if (diff === 0) return t('quick.dueToday')
+  if (diff === 1) return t('quick.dueTomorrow')
+  if (diff < 0) return t('quick.dueOverdue')
+  return d.toLocaleDateString(lang.value, { month: 'short', day: 'numeric' })
+}
+function dueKind(task) {
+  if (!task.due_date && !task.reminder_date) return 'none'
+  const iso = task.due_date || task.reminder_date
+  const today = new Date()
+  const ymd = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`
+  const diff = Math.round((new Date(ymd(new Date(iso + 'T00:00:00'))) - new Date(ymd(today))) / 86400000)
+  if (diff < 0) return 'overdue'
+  if (diff === 0) return 'today'
+  if (diff === 1) return 'tomorrow'
+  return 'future'
+}
+
+function noteText(n) {
+  if (n?.preview) return n.preview
+  return htmlToText(n?.content || '')
+}
 
 async function add(e) {
   if (e && (e.isComposing || e.keyCode === 229)) return // IME composition Enter
@@ -86,59 +146,8 @@ async function add(e) {
 }
 
 async function toggleDone(task) {
-  // the check mark is a gesture of its own: it flips completion and never
-  // expands the row (the click handler is stopped at the button)
-  await window.api.quickToggleDone(task.id, !isDone(task))
+  await window.api.quickToggleDone(task.id, true)
   data.value = await window.api.quickData()
-}
-
-const isDone = (task) => task?.status === 'completed'
-
-// expanded rows — clicking a row reveals more, clicking again collapses it
-const openTasks = ref(new Set())
-const openNotes = ref(new Set())
-
-// NOTE: refs are auto-unwrapped in templates, so the handler must close over
-// the ref itself instead of receiving it as an argument.
-function toggleExpand(setRef, id) {
-  const next = new Set(setRef.value)
-  if (next.has(id)) next.delete(id)
-  else next.add(id)
-  setRef.value = next
-}
-const toggleTaskExpand = (id) => toggleExpand(openTasks, id)
-const toggleNoteExpand = (id) => toggleExpand(openNotes, id)
-const taskOpen = (id) => openTasks.value.has(id)
-const noteOpen = (id) => openNotes.value.has(id)
-
-/** plain-text body of a task note (stored as HTML) */
-function taskNote(task) {
-  const raw = task?.note_html || ''
-  if (!raw) return ''
-  return htmlToText(raw)
-}
-
-/** does expanding this task reveal anything at all? */
-function taskHasDetail(task) {
-  return !!(task?.due_date || task?.reminder_date || task?.importance === 'important' || taskNote(task))
-}
-
-/** plain-text body of a note (stored as HTML) */
-function noteText(n) {
-  if (n?.preview) return n.preview
-  return htmlToText(n?.content || '')
-}
-
-function noteTitle(n) {
-  return (n?.title || '').trim() || noteText(n).split('\n')[0] || '…'
-}
-
-function formatDue(dateStr) {
-  if (!dateStr) return ''
-  const lang = navigator.language.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en-US'
-  const d = new Date(dateStr + 'T00:00:00')
-  if (Number.isNaN(d.getTime())) return dateStr
-  return d.toLocaleDateString(lang, { month: 'short', day: 'numeric' })
 }
 
 function openNote(n) {
@@ -147,6 +156,15 @@ function openNote(n) {
 
 function closePanel() { window.api.quickClose() }
 function openMainWin() { window.api.quickOpenMain() }
+
+// 置顶: keep the panel above other windows
+const pinned = ref(false)
+async function togglePin() {
+  pinned.value = await window.api.quickAlwaysOnTop(!pinned.value)
+}
+onMounted(async () => {
+  try { pinned.value = await window.api.quickIsAlwaysOnTop() } catch { pinned.value = false }
+})
 </script>
 
 <template>
@@ -200,86 +218,44 @@ function openMainWin() { window.api.quickOpenMain() }
       <span v-else class="qhint dim">{{ kind === 'todo' ? t('add.hint') : t('quick.placeholderNote') }}</span>
     </div>
 
-    <!-- unified scroll body: today's tasks + all notes -->
+    <!-- unified scroll body -->
     <div class="qbody">
-      <div class="qsec-block" :style="secStyle('myday')">
+      <!-- 1) 已计划 -->
+      <div v-if="showPlanned" class="qsec-block" :style="secStyle('planned')">
         <div class="qsect">
-          <span class="qsect-label">{{ t('quick.myday') }} · {{ data.today.length }}</span>
+          <span class="qsect-label">{{ t('quick.planned') }} · {{ data.planned.length }}</span>
         </div>
-        <div v-if="!data.today.length && !data.due.length" class="qempty">{{ t('quick.noTasks') }}</div>
-        <div v-for="task in data.today" :key="task.id" class="qrow">
-          <div
-            class="qtask"
-            :class="{ done: isDone(task), open: taskOpen(task.id) }"
-            role="button"
-            tabindex="0"
-            :aria-expanded="taskOpen(task.id)"
-            @click="toggleTaskExpand(task.id)"
-            @keydown.enter.prevent="toggleTaskExpand(task.id)"
-            @keydown.space.prevent="toggleTaskExpand(task.id)"
-          >
-            <button
-              class="qcheck"
-              :class="{ on: isDone(task) }"
-              :aria-label="t('quick.markDone')"
-              :aria-pressed="isDone(task)"
-              @click.stop="toggleDone(task)"
-            >
+        <div v-if="!data.planned.length" class="qempty">{{ t('quick.noPlanned') }}</div>
+        <div v-for="task in data.planned" :key="task.id" class="qrow">
+          <div class="qtask" :class="{ open: isOpen(task.id) }">
+            <button class="qcheck" :aria-label="t('quick.markDone')" @click.stop="toggleDone(task)">
               <Check :size="11" />
             </button>
-            <span class="qtask-label">{{ task.subject }}</span>
-            <ChevronRight class="qcaret" :class="{ open: taskOpen(task.id) }" :size="13" />
-          </div>
-          <div v-if="taskOpen(task.id)" class="qdetail">
-            <div class="qmeta">
-              <span v-if="task.due_date" class="qchip"><CalendarDays :size="11" /> {{ formatDue(task.due_date) }}</span>
-              <span v-if="task.importance === 'important'" class="qchip star"><Star :size="11" /> {{ t('quick.important') }}</span>
-            </div>
-            <p v-if="taskNote(task)" class="qbody-text">{{ taskNote(task) }}</p>
-            <p v-else-if="!taskHasDetail(task)" class="qbody-text dim">{{ t('quick.noMore') }}</p>
+            <button class="qtask-main" @click="toggleOpen(task.id)">
+              <span class="qtask-title" :title="task.subject">{{ task.subject }}</span>
+              <span class="qtask-tags">
+                <span class="qtag" :data-kind="dueKind(task)">
+                  <CalendarDays :size="10" /> {{ fmtDue(task) }}
+                </span>
+                <span v-if="task.importance === 'important'" class="qtag star">
+                  <Star :size="10" /> {{ t('quick.important') }}
+                </span>
+                <span v-if="task.reminder_date" class="qtag bell">
+                  <Clock :size="10" /> {{ t('quick.remind') }}
+                </span>
+              </span>
+              <span v-if="isOpen(task.id)" class="qtask-more">
+                <span v-if="task.note_html" class="qtask-note">{{ htmlToText(task.note_html) }}</span>
+                <span v-else class="qtask-note dim">{{ t('quick.noMore') }}</span>
+              </span>
+            </button>
+            <ChevronRight class="qcaret" :class="{ open: isOpen(task.id) }" :size="13" @click.stop="toggleOpen(task.id)" />
           </div>
         </div>
       </div>
 
-      <div class="qsec-block" :style="secStyle('due')">
-        <template v-if="data.due.length">
-          <div class="qsect"><span class="qsect-label">{{ t('quick.today') }} · {{ data.due.length }}</span></div>
-          <div v-for="task in data.due" :key="task.id" class="qrow">
-            <div
-              class="qtask"
-              :class="{ done: isDone(task), open: taskOpen(task.id) }"
-              role="button"
-              tabindex="0"
-              :aria-expanded="taskOpen(task.id)"
-              @click="toggleTaskExpand(task.id)"
-              @keydown.enter.prevent="toggleTaskExpand(task.id)"
-              @keydown.space.prevent="toggleTaskExpand(task.id)"
-            >
-              <button
-                class="qcheck"
-                :class="{ on: isDone(task) }"
-                :aria-label="t('quick.markDone')"
-                :aria-pressed="isDone(task)"
-                @click.stop="toggleDone(task)"
-              >
-                <Check :size="11" />
-              </button>
-              <span class="qtask-label">{{ task.subject }}</span>
-              <ChevronRight class="qcaret" :class="{ open: taskOpen(task.id) }" :size="13" />
-            </div>
-            <div v-if="taskOpen(task.id)" class="qdetail">
-              <div class="qmeta">
-                <span v-if="task.due_date" class="qchip"><CalendarDays :size="11" /> {{ formatDue(task.due_date) }}</span>
-                <span v-if="task.importance === 'important'" class="qchip star"><Star :size="11" /> {{ t('quick.important') }}</span>
-              </div>
-              <p v-if="taskNote(task)" class="qbody-text">{{ taskNote(task) }}</p>
-              <p v-else-if="!taskHasDetail(task)" class="qbody-text dim">{{ t('quick.noMore') }}</p>
-            </div>
-          </div>
-        </template>
-      </div>
-
-      <div class="qsec-block" :style="secStyle('notes')">
+      <!-- 2) 便签 -->
+      <div v-if="showNotes" class="qsec-block" :style="secStyle('notes')">
         <div class="qsect">
           <span class="qsect-label">{{ t('quick.notes') }} · {{ filteredNotes.length }}</span>
           <div class="qnf">
@@ -289,30 +265,22 @@ function openMainWin() { window.api.quickOpenMain() }
         </div>
         <div v-if="!filteredNotes.length" class="qempty">{{ t('quick.noNotes') }}</div>
         <div v-for="n in filteredNotes" :key="n.id" class="qrow">
-          <div
-            class="qnote"
-            :data-color="n.color"
-            :class="{ open: noteOpen(n.id) }"
-            role="button"
-            tabindex="0"
-            :aria-expanded="noteOpen(n.id)"
-            @click="toggleNoteExpand(n.id)"
-            @keydown.enter.prevent="toggleNoteExpand(n.id)"
-            @keydown.space.prevent="toggleNoteExpand(n.id)"
-          >
+          <div class="qnote" :data-color="n.color" :class="{ open: isOpen(n.id) }" @click="toggleOpen(n.id)">
             <span class="qn-ico"><StickyNote :size="12" /></span>
             <span class="qn-body">
-              <span class="qn-title">{{ noteTitle(n) }}</span>
-              <span v-if="noteText(n)" class="qn-snippet">{{ noteText(n).slice(0, 40) }}</span>
+              <span class="qn-title" :title="n.title || noteText(n)">{{ n.title || noteText(n).split('\n')[0] || '…' }}</span>
+              <span class="qn-tags">
+                <span v-if="n.pinned" class="qtag star"><Pin :size="10" /> {{ t('quick.pinned') }}</span>
+                <span class="qtag date">{{ (n.updated_at || '').slice(0, 10) }}</span>
+              </span>
+              <span v-if="isOpen(n.id)" class="qtask-more">
+                <span class="qtask-note">{{ noteText(n) }}</span>
+                <button class="qopen-btn" @click.stop="openNote(n)">
+                  {{ t('quick.openNote') }} <ExternalLink :size="11" />
+                </button>
+              </span>
             </span>
-            <span v-if="n.pinned" class="qn-pin"><Pin :size="11" /></span>
-            <ChevronRight class="qcaret" :class="{ open: noteOpen(n.id) }" :size="13" />
-          </div>
-          <div v-if="noteOpen(n.id)" class="qdetail">
-            <p v-if="noteText(n)" class="qbody-text">{{ noteText(n) }}</p>
-            <button class="qopen-btn" @click.stop="openNote(n)">
-              {{ t('quick.openNote') }} <ExternalLink :size="11" />
-            </button>
+            <ChevronRight class="qcaret" :class="{ open: isOpen(n.id) }" :size="13" @click.stop="toggleOpen(n.id)" />
           </div>
         </div>
       </div>
@@ -415,10 +383,10 @@ function openMainWin() { window.api.quickOpenMain() }
   flex: 1; border: none; outline: none;
   background: transparent;
   font-size: var(--fs-base);
-  font-family: inherit;
   color: var(--fg-text);
   padding: 8px 0;
   min-width: 0;
+  font-family: inherit;
 }
 .qinput::placeholder { color: var(--fg-tertiary); }
 .qadd-btn {
@@ -448,27 +416,21 @@ function openMainWin() { window.api.quickOpenMain() }
   flex-shrink: 0;
 }
 .qempty { padding: 16px 12px; text-align: center; color: var(--fg-tertiary); font-size: var(--fs-sm); }
-.qempty.small { padding: 10px 12px; font-size: var(--fs-xs); }
 
 .qrow { display: flex; flex-direction: column; }
-.qtask {
-  display: flex; align-items: center; gap: 9px;
+.qtask, .qnote {
+  display: flex; align-items: flex-start; gap: 8px;
   width: 100%;
   padding: 7px 8px;
-  border: none; border-radius: var(--r-sm);
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--fg-text);
-  font-size: var(--fs-base);
-  cursor: pointer;
   text-align: left;
   font-family: inherit;
   transition: background var(--t-fast);
-  outline: none;
 }
-.qtask:hover, .qtask:focus-visible { background: var(--bg-hover); }
-.qtask.open { background: var(--bg-hover); }
-.qtask.done .qtask-label { color: var(--fg-tertiary); text-decoration: line-through; }
-/* the check mark is its own target — it must never expand the row */
+.qtask:hover, .qnote:hover { background: var(--bg-hover); }
+.qtask.open, .qnote.open { background: var(--bg-hover); }
 .qcheck {
   width: 16px; height: 16px;
   padding: 0;
@@ -478,78 +440,80 @@ function openMainWin() { window.api.quickOpenMain() }
   display: flex; align-items: center; justify-content: center;
   color: transparent;
   flex-shrink: 0;
+  margin-top: 2px;
   transition: all var(--t-fast);
   cursor: pointer;
 }
 .qtask:hover .qcheck { border-color: var(--success); color: var(--success); }
-.qcheck.on {
-  background: var(--success);
-  border-color: var(--success);
-  color: #fff;
+.qtask-main {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 3px;
+  border: none; background: transparent;
+  padding: 0; text-align: left;
+  color: inherit; font-family: inherit;
+  cursor: pointer;
 }
-.qtask-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qcaret {
+.qtask-title {
+  font-size: var(--fs-sm);
+  /* the planned list is the focus of the panel — make it read at a glance */
+  font-weight: 800;
+  letter-spacing: -0.1px;
+  line-height: 1.4;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.qtask-tags, .qn-tags { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.qtag {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 1px 6px;
+  border-radius: var(--r-full);
+  background: var(--bg-hover);
   color: var(--fg-tertiary);
-  flex-shrink: 0;
-  opacity: 0.5;
-  transition: transform var(--t-fast), opacity var(--t-fast);
+  font-size: 10px;
+  line-height: 1.6;
+  white-space: nowrap;
 }
-.qcaret.open { transform: rotate(90deg); opacity: 1; }
-
-/* expanded detail block */
-.qdetail {
-  margin: 0 8px 6px 33px;
-  padding: 8px 10px;
+.qtag[data-kind="today"] { background: var(--theme-orange-soft); color: var(--theme-orange); }
+.qtag[data-kind="overdue"] { background: var(--theme-red-soft); color: var(--theme-red); }
+.qtag[data-kind="tomorrow"] { background: var(--theme-yellow-soft); color: var(--theme-yellow); }
+.qtag[data-kind="future"] { background: var(--theme-blue-soft); color: var(--theme-blue); }
+.qtag.star { background: var(--theme-crimson-soft); color: var(--theme-crimson); }
+.qtag.bell { background: var(--theme-purple-soft); color: var(--theme-purple); }
+.qtag.dim { background: transparent; }
+.qtag.date { background: var(--bg-hover); color: var(--fg-tertiary); }
+.qtask-more {
+  margin-top: 3px;
+  padding: 6px 8px;
   border-left: 2px solid var(--border);
   border-radius: 0 var(--r-sm) var(--r-sm) 0;
   background: var(--bg-card);
-  animation: qdetail-in var(--t-fast) var(--ease);
 }
-@keyframes qdetail-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
-.qmeta { display: flex; flex-wrap: wrap; gap: 6px; }
-.qchip {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 2px 7px;
-  border-radius: var(--r-full);
-  background: var(--bg-hover);
-  color: var(--fg-secondary);
-  font-size: var(--fs-xs);
-}
-.qchip.star { color: var(--theme-orange); background: var(--theme-orange-soft); }
-.qbody-text.dim { color: var(--fg-tertiary); font-style: italic; }
-.qbody-text {
-  margin: 6px 0 0;
+.qtask-note {
   font-size: var(--fs-xs);
   line-height: 1.6;
   color: var(--fg-secondary);
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 140px;
+  display: block;
+  max-height: 130px;
   overflow-y: auto;
 }
-.qopen-btn {
-  display: inline-flex; align-items: center; gap: 4px;
-  margin-top: 8px;
-  padding: 4px 10px;
-  border: none; border-radius: var(--r-sm);
-  background: var(--bg-hover);
-  color: var(--fg-secondary);
-  font-size: var(--fs-xs);
-  font-family: inherit;
+.qtask-note.dim { color: var(--fg-tertiary); font-style: italic; }
+.qcaret {
+  color: var(--fg-tertiary);
+  flex-shrink: 0;
+  opacity: 0.5;
+  margin-top: 2px;
   cursor: pointer;
+  transition: transform var(--t-fast), opacity var(--t-fast);
 }
-.qopen-btn:hover { background: var(--accent); color: var(--fg-on-accent); }
+.qcaret.open { transform: rotate(90deg); opacity: 1; }
 
-/* the filter pill in the notes section header.
-   NB: the selector must be plain `.qnf` — the markup has no `.notes-head`
-   ancestor, so the old descendant selector never matched and the icon
-   ended up flush against the placeholder text. */
-.qnf {
+.notes-head .qnf {
   margin-left: auto;
   display: flex; align-items: center; gap: 8px;
   background: var(--bg-hover);
   border-radius: var(--r-full);
-  padding: 3px 10px;
+  padding: 2px 10px;
   min-width: 0;
 }
 .qnf-ico { color: var(--fg-tertiary); flex-shrink: 0; }
@@ -558,21 +522,7 @@ function openMainWin() { window.api.quickOpenMain() }
   font-size: var(--fs-xs); color: var(--fg-text); font-family: inherit;
   width: 110px; min-width: 0;
 }
-.qnote {
-  display: flex; align-items: flex-start; gap: 8px;
-  width: 100%;
-  padding: 7px 8px;
-  border: none; border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--fg-text);
-  cursor: pointer;
-  text-align: left;
-  font-family: inherit;
-  transition: background var(--t-fast);
-  outline: none;
-}
-.qnote:hover, .qnote:focus-visible { background: var(--bg-hover); }
-.qnote.open { background: var(--bg-hover); }
+.qnote { align-items: flex-start; }
 .qn-ico {
   width: 20px; height: 20px;
   border-radius: 6px;
@@ -586,17 +536,24 @@ function openMainWin() { window.api.quickOpenMain() }
 .qnote[data-color="pink"] .qn-ico { background: var(--theme-pink-soft); color: var(--theme-pink); }
 .qnote[data-color="purple"] .qn-ico { background: var(--theme-purple-soft); color: var(--theme-purple); }
 .qnote[data-color="orange"] .qn-ico { background: var(--theme-orange-soft); color: var(--theme-orange); }
-.qn-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.qn-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .qn-title {
-  font-size: var(--fs-sm); font-weight: 500;
+  /* note titles stay regular — only the planned tasks are emphasised */
+  font-size: var(--fs-sm); font-weight: 400;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.qn-snippet {
-  font-size: var(--fs-xs); color: var(--fg-tertiary);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.qopen-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-top: 6px;
+  padding: 3px 9px;
+  border: none; border-radius: var(--r-sm);
+  background: var(--bg-hover);
+  color: var(--fg-secondary);
+  font-size: var(--fs-xs);
+  font-family: inherit;
+  cursor: pointer;
 }
-.qn-pin { color: var(--theme-orange); flex-shrink: 0; margin-top: 2px; }
-.qnote .qcaret { margin-top: 3px; }
+.qopen-btn:hover { background: var(--accent); color: var(--fg-on-accent); }
 
 .qfoot {
   display: flex; align-items: center; justify-content: center; gap: 6px;

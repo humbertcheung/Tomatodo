@@ -140,7 +140,7 @@ export function refreshTrayMenu() {
     : `🍅 番茄钟（今日 ${pomo.sessionsToday} 个）`
   const items = [
     { label: t('tray.openApp'), click: () => openMainWindow() },
-    { label: t('tray.quickAdd'), accelerator: 'CommandOrControl+Shift+T', click: () => toggleQuickPanel(true) },
+    { label: t('tray.quickAdd'), accelerator: getSetting('globalShortcut', 'CommandOrControl+Alt+T'), click: () => toggleQuickPanel(true) },
     {
       label: pomoLabel,
       click: () => {
@@ -190,9 +190,15 @@ export function updateTrayTitle() {
 
 export function registerGlobalShortcut() {
   globalShortcut.unregisterAll()
-  const sc = getSetting('globalShortcut', 'CommandOrControl+Shift+T')
+  const raw = getSetting('globalShortcut', 'CommandOrControl+Alt+T')
+  // a stored accelerator may carry duplicated separators ("A++B") — Electron
+  // cannot register those, so normalise before use
+  const sc = String(raw || '').split('+').filter(Boolean).join('+')
   if (sc) {
-    try { globalShortcut.register(sc, () => toggleQuickPanel(true)) } catch (e) { console.error('global shortcut failed', e) }
+    try {
+      globalShortcut.register(sc, () => toggleQuickPanel(true))
+      if (sc !== raw) setSetting('globalShortcut', sc)
+    } catch (e) { console.error('global shortcut failed', e) }
   }
 }
 
@@ -338,10 +344,19 @@ async function quickAddFromPanel(payload) {
 
 function buildQuickData() {
   const ov = overviewForTray()
-  const today = querySmartList('myday', {})
-  const due = querySmartList('planned', {}).filter((x) => x.due_date && x.due_date <= localYMD())
+  // "已计划": every task that has a due date / reminder, sorted by due date
+  // (undated ones last, today first)
+  const planned = querySmartList('planned', {})
+    .filter((x) => x.status !== 'completed')
+    .sort((a, b) => {
+      const ad = a.due_date || a.reminder_date || '9999-12-31'
+      const bd = b.due_date || b.reminder_date || '9999-12-31'
+      if (ad !== bd) return ad < bd ? -1 : 1
+      if (a.importance !== b.importance) return a.importance === 'important' ? -1 : 1
+      return (a.position || 0) - (b.position || 0)
+    })
   const notes = listNotes({ limit: 200 })
-  return { overview: ov, today, due, notes }
+  return { overview: ov, planned, notes }
 }
 
 function localYMD() {

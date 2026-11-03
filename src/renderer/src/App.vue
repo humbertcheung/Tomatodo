@@ -204,12 +204,11 @@ async function ctxClear() {
 
 let offCommand = null
 let offOpenTask = null
-let offOpenNote = null
 
 onMounted(async () => {
   offCommand = window.api.onCommand(handleCommand)
   offOpenTask = window.api.onOpenTask((taskId) => openTask(taskId))
-  offOpenNote = window.api.onOpenNote((id) => { state.mode = 'note'; state.selectedNoteId = id })
+  // open the note in the sticky popup AND select it in the detail panel
   window.addEventListener('keydown', onKeydown)
   window.addEventListener('resize', onResize)
   onResize()
@@ -217,7 +216,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  offCommand?.(); offOpenTask?.(); offOpenNote?.()
+  offCommand?.(); offOpenTask?.()
   window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('resize', onResize)
 })
@@ -462,15 +461,4 @@ function onKeydown(e) {
 }
 .ps-label { font-size: var(--fs-xs); color: var(--fg-secondary); width: 44px; flex-shrink: 0; }
 .pop-slider input[type="range"] { flex: 1; accent-color: var(--accent); }
-.swatch-row { display: flex; gap: 8px; padding: 4px 10px 8px; }
-.swatch {
-  width: 26px; height: 26px;
-  border-radius: var(--r-full);
-  border: 2px solid transparent;
-  cursor: pointer;
-  transition: transform var(--t-fast), border var(--t-fast);
-  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
-}
-.swatch:hover { transform: scale(1.12); }
-.swatch.on { border-color: var(--accent); }
 </style>

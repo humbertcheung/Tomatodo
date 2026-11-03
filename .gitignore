@@ -32,3 +32,7 @@ npm-debug.log*
 # local env
 .env
 .env.*
+
+# widget build output (regenerate with npm run widget:build)
+widget/build/
+resources/widget/

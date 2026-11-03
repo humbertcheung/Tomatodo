@@ -240,7 +240,6 @@ onBeforeUnmount(() => document.removeEventListener('click', closePop))
         @focus="inputFocused = true"
         @blur="inputFocused = false"
       />
-      <span v-if="inputFocused && newInput" class="add-hint">{{ t('add.hint') }}</span>
       <!-- the planned view needs a date, so it gets the date fields inline -->
       <template v-if="isPlanned">
         <label class="add-field">
@@ -253,6 +252,8 @@ onBeforeUnmount(() => document.removeEventListener('click', closePop))
         </label>
       </template>
     </div>
+    <!-- the hint lives on its own line so it never squeezes the input -->
+    <div v-if="inputFocused && newInput" class="add-hint">{{ t('add.hint') }}</div>
 
     <!-- task list -->
     <div class="tasks-scroll" @click.self="state.selectedTaskId = null">
@@ -461,6 +462,11 @@ onBeforeUnmount(() => document.removeEventListener('click', closePop))
   flex-shrink: 0;
   position: relative;
   z-index: 2;
+  /* the bar must never push its content out of the window: the date
+     fields wrap onto their own line when there is not enough room */
+  flex-wrap: wrap;
+  row-gap: 6px;
+  min-width: 0;
 }
 .add-bar.focused { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .add-plus {
@@ -476,17 +482,25 @@ onBeforeUnmount(() => document.removeEventListener('click', closePop))
 }
 .add-plus:hover { transform: scale(1.06); }
 .add-input {
-  flex: 1;
+  flex: 1 1 180px;
   border: none; outline: none;
   background: transparent;
   font-size: var(--fs-base);
   color: var(--fg-text);
   padding: 9px 0;
   font-family: inherit;
-  min-width: 0;
+  min-width: 140px;
 }
 .add-input::placeholder { color: var(--fg-tertiary); }
-.add-hint { font-size: var(--fs-xs); color: var(--fg-tertiary); white-space: nowrap; }
+.add-hint {
+  font-size: var(--fs-xs);
+  color: var(--fg-tertiary);
+  margin: -2px 32px 0 22px;
+  padding: 0 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .unplanned-hint {
   font-size: var(--fs-xs);
   color: var(--fg-tertiary);
@@ -509,8 +523,19 @@ onBeforeUnmount(() => document.removeEventListener('click', closePop))
   font-size: var(--fs-xs); color: var(--fg-text);
   font-family: inherit;
   width: 108px;
+  max-width: 100%;
 }
 .add-time { width: 78px; }
+/* narrow windows: the fields shrink before anything overflows */
+@media (max-width: 900px) {
+  .add-date { width: 92px; }
+  .add-time { width: 66px; }
+  .add-field { padding: 4px 6px; gap: 3px; }
+}
+@media (max-width: 700px) {
+  .add-bar { margin-right: 22px; }
+  .add-hint { margin-right: 22px; }
+}
 .add-date::-webkit-calendar-picker-indicator,
 .add-time::-webkit-calendar-picker-indicator { opacity: 0.45; cursor: pointer; }
 .add-field:hover ::-webkit-calendar-picker-indicator { opacity: 0.8; }

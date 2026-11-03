@@ -16,7 +16,8 @@ import path from 'node:path'
 import os from 'node:os'
 import zlib from 'node:zlib'
 import { app, shell } from 'electron'
-import { exportJSON, getSetting, setSetting, listNotes } from './db.js'
+import { exportJSON, getSetting, setSetting, listNotes, restoreSnapshot } from './db.js'
+import { readZip } from './zip-read.js'
 import { buildZip } from './zip.js'
 
 const BACKUP_FILE = 'Tomatodo-backup.zip'
@@ -37,6 +38,46 @@ const SET_ENABLED = 'backupEnabled'
 const SET_FREQ = 'backupFreq'
 const SET_TIME = 'backupTime'
 const SET_LAST = 'backupLastAt'
+
+/* ---------------- restore ---------------- */
+
+/**
+ * Restore a backup archive (tasks.json + notes/*.rtf) over the current data.
+ * The archive is a complete snapshot, so the restore REPLACES everything.
+ * @param {string} zipPath
+ */
+export function restoreFromBackup(zipPath) {
+  let entries
+  try {
+    entries = readZip(fs.readFileSync(zipPath))
+  } catch (e) {
+    return { ok: false, error: '无法读取备份包：' + (e?.message || e) }
+  }
+
+  const jsonEntry = entries.find((e) => e.name === 'tasks.json' || e.name.endsWith('/tasks.json'))
+  if (!jsonEntry) return { ok: false, error: '备份包中没有 tasks.json，可能不是本应用导出的备份' }
+
+  let snapshot
+  try {
+    snapshot = JSON.parse(jsonEntry.data.toString('utf8'))
+  } catch (e) {
+    return { ok: false, error: 'tasks.json 解析失败：' + (e?.message || e) }
+  }
+
+  // the notes travel as RTF documents inside the archive
+  const noteFiles = new Map()
+  for (const e of entries) {
+    const m = /notes\/([^/]+\.rtf)$/.exec(e.name)
+    if (m) noteFiles.set(m[1], e.data)
+  }
+
+  try {
+    const stats = restoreSnapshot(snapshot, noteFiles)
+    return { ok: true, ...stats }
+  } catch (e) {
+    return { ok: false, error: String(e?.message || e) }
+  }
+}
 
 /* ---------------- schedule helpers ---------------- */
 

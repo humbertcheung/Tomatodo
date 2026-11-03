@@ -5,6 +5,7 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme, nativeImage, screen } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
+import { execFile } from 'node:child_process'
 import * as db from './db'
 import { setupTray, rebuildTray, refreshTrayMenu, updateTrayTitle, showQuickPanel, hideQuick, registerGlobalShortcut, destroyTray, openMainWindow } from './tray'
 import { buildAppMenu } from './menu'
@@ -13,8 +14,9 @@ import { setMiniLang } from '@shared/i18n-mini'
 import { deriveNextOccurrence } from '@shared/recurrence'
 import { getPomodoro, startPomodoro, pausePomodoro, resetPomodoro, restorePomodoro, setPomodoroTickHook } from './pomodoro'
 import { getWeather, invalidateWeatherCache } from './weather'
+import { publishWidgetSnapshot } from './widget.js'
 import { htmlToRtf, htmlToText, rtfToHtml } from '@shared/rtf'
-import { backupStatus, backupStatusAfter, runBackup, openBackupDir, openNotesDir, startBackupScheduler } from './backup'
+import { backupStatus, backupStatusAfter, runBackup, restoreFromBackup, openBackupDir, openNotesDir, startBackupScheduler } from './backup'
 
 let mainWindow = null
 let quitting = false
@@ -442,110 +444,39 @@ function createMainWindow() {
         // quick panel shot
         if (process.env.TODOMENU_QUICK) {
           showQuickPanel(true)
-          await new Promise((r) => setTimeout(r, 1200))
-          if (process.env.TODOMENU_WXDEBUG) {
-            try {
-              const qw = BrowserWindow.getAllWindows().find((w) => w !== mainWindow)
-              const qinfo = await qw.webContents.executeJavaScript(
-                `JSON.stringify({ logo: window.__quickLogo, api: !!window.api?.iconUrl })`, true)
-              fs.writeFileSync(path.join(shotDir, 'quick-probe.json'), String(qinfo))
-            } catch (e) { fs.writeFileSync(path.join(shotDir, 'quick-probe.json'), 'FAIL:' + e) }
-          }
-          const qimg = await mainWindow.webContents.capturePage().catch(() => null)
+          await new Promise((r) => setTimeout(r, 1500))
           const qw = BrowserWindow.getAllWindows().find((w) => w !== mainWindow)
           if (qw) {
             const qi = await qw.webContents.capturePage()
             fs.writeFileSync(path.join(shotDir, 'quick.png'), qi.toPNG())
-            // functional probe: check-mark vs row click must be isolated,
-            // and the check must actually complete the task
             try {
-              const probe = await qw.webContents.executeJavaScript(`(async () => {
+              const out = await qw.webContents.executeJavaScript(`(async () => {
                 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
-                const out = {}
-                // 1) clicking the CHECK must not expand the row
-                const check = document.querySelector('.qcheck')
-                out.hasRow = !!document.querySelector('.qtask')
-                out.hasCheck = !!check
-                out.detailBefore = !!document.querySelector('.qdetail')
-                check?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-                await sleep(600)
-                out.detailAfterCheck = !!document.querySelector('.qdetail')
-                // the task the check hit must now be completed
-                const st = await window.api.quickData()
-                out.completed = st.today.filter(x => x.status === 'completed').length
-                out.open = st.today.filter(x => x.status !== 'completed').length
-                // 2) clicking the ROW expands it (re-query: the list re-rendered)
-                document.querySelector('.qtask')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-                await sleep(300)
-                out.detailAfterRow = !!document.querySelector('.qdetail')
-                out.detailText = (document.querySelector('.qbody-text')?.textContent || '').slice(0, 40)
-                // 3) a note row expands too
-                out.hasNoteRow = !!document.querySelector('.qnote')
-                document.querySelector('.qnote')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-                await sleep(300)
-                out.noteExpanded = !!document.querySelector('.qnote.open')
-                out.noteOpenBtn = !!document.querySelector('.qopen-btn')
-                out.noteText = (document.querySelector('.qbody-text')?.textContent || '').slice(0, 40)
-                // 4) the header is a drag region
-                const head = document.querySelector('.qhead')
-                out.dragRegion = head ? getComputedStyle(head).webkitAppRegion : null
-                // 5) the pin button toggles always-on-top
-                out.pinBtn = !!document.querySelector('.qpin')
-                out.pinnedBefore = await window.api.quickIsAlwaysOnTop()
-                document.querySelector('.qpin')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+                const o = {}
+                o.sections = [...document.querySelectorAll('.qsect-label')].map(e => e.textContent.trim())
+                o.taskWeight = document.querySelector('.qtask-title')
+                  ? getComputedStyle(document.querySelector('.qtask-title')).fontWeight : null
+                o.noteWeight = document.querySelector('.qn-title')
+                  ? getComputedStyle(document.querySelector('.qn-title')).fontWeight : null
+                o.pinBtn = !!document.querySelector('.qpin')
+                // expand a note row and click 打开 — the popup chain
+                document.querySelector('.qn-title')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
                 await sleep(400)
-                out.pinnedAfter = await window.api.quickIsAlwaysOnTop()
-                out.pinHighlighted = !!document.querySelector('.qpin.on')
-                // 6) the note filter icon has breathing room from the text
-                const ico = document.querySelector('.qnf-ico')
-                const inp = document.querySelector('.qnf-input')
-                if (ico && inp) {
-                  const a = ico.getBoundingClientRect()
-                  const b = inp.getBoundingClientRect()
-                  out.filterGap = Math.round(b.left - a.right)
-                }
-                return JSON.stringify(out)
+                o.openBtn = !!document.querySelector('.qopen-btn')
+                document.querySelector('.qopen-btn')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+                return JSON.stringify(o)
               })()`, true)
-              fs.writeFileSync(path.join(shotDir, 'quick-probe.json'), String(probe))
+              fs.writeFileSync(path.join(shotDir, 'quick-probe.json'), String(out))
             } catch (e) { fs.writeFileSync(path.join(shotDir, 'quick-probe.json'), 'FAIL:' + (e?.message || e)) }
-            // probe: a PINNED panel must survive losing focus; an unpinned one
-            // must close when the user clicks elsewhere
+            // the main window should now show the sticky popup
+            await new Promise((r) => setTimeout(r, 2000))
             try {
-              const pinState = []
-              const qwin = BrowserWindow.getAllWindows().find((w) => w !== mainWindow)
-              // 1) unpinned → blur closes it
-              qw.webContents.executeJavaScript(`window.api.quickAlwaysOnTop(false)`)
-              await new Promise((r) => setTimeout(r, 400))
-              qwin.blur()
-              await new Promise((r) => setTimeout(r, 900))
-              pinState.push(['unpinned blur closes', !qwin.isVisible()])
-              // 2) pinned → blur keeps it open
-              showQuickPanel(true)
-              await new Promise((r) => setTimeout(r, 900))
-              qw.webContents.executeJavaScript(`window.api.quickAlwaysOnTop(true)`)
-              await new Promise((r) => setTimeout(r, 500))
-              qwin.blur()
-              await new Promise((r) => setTimeout(r, 900))
-              pinState.push(['pinned blur stays open', qwin.isVisible()])
-              // 3) and the tray icon still closes it
-              hideQuick()
-              await new Promise((r) => setTimeout(r, 400))
-              pinState.push(['tray toggles it closed', !qwin.isVisible()])
-              qw.webContents.executeJavaScript(`window.api.quickAlwaysOnTop(false)`)
-              fs.writeFileSync(path.join(shotDir, 'pin-probe.json'), JSON.stringify(pinState))
-            } catch (e) { fs.writeFileSync(path.join(shotDir, 'pin-probe.json'), 'FAIL:' + (e?.message || e)) }
-            // capture again with the rows expanded (the probe left them open)
-            try {
-              await qw.webContents.executeJavaScript(
-                `(() => {
-                  document.querySelectorAll('.qtask')[1]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-                  document.querySelector('.qnote')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-                  return true
-                })()`, true)
-              await new Promise((r) => setTimeout(r, 400))
-              const qi2 = await qw.webContents.capturePage()
-              fs.writeFileSync(path.join(shotDir, 'quick-expanded.png'), qi2.toPNG())
-            } catch { /* ignore */ }
+              const st = await mainWindow.webContents.executeJavaScript(
+                `JSON.stringify({ popup: !!document.querySelector('.sticky-pop'), title: document.querySelector('.sp-name')?.value || '' })`, true)
+              fs.writeFileSync(path.join(shotDir, 'note-open-probe.json'), String(st))
+              const cap = await mainWindow.webContents.capturePage()
+              fs.writeFileSync(path.join(shotDir, 'note-opened.png'), cap.toPNG())
+            } catch (e) { fs.writeFileSync(path.join(shotDir, 'note-open-probe.json'), 'FAIL:' + (e?.message || e)) }
           }
           hideQuick()
         }
@@ -598,6 +529,23 @@ function seedDemo() {
   db.setSetting('demo_seeded', true)
 }
 
+/**
+ * Register the bundled WidgetKit extension with LaunchServices so the
+ * desktop widgets show up in the widget gallery.
+ */
+function registerWidgetExtension() {
+  if (process.platform !== 'darwin') return
+  try {
+    const appPath = app.getPath('exe')
+    const appBundle = path.dirname(path.dirname(appPath))
+    const appex = path.join(appBundle, 'Contents', 'PlugIns', 'TomatodoWidget.appex')
+    if (!fs.existsSync(appex)) return
+    const lsregister =
+      '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister'
+    execFile(lsregister, ['-f', appBundle], () => {})
+  } catch { /* registration is best effort */ }
+}
+
 function localYMD(offset = 0) {
   const d = new Date()
   d.setDate(d.getDate() + offset)
@@ -614,6 +562,8 @@ function broadcast(channel, payload) {
 function broadcastChanged() {
   refreshTrayMenu()
   updateTrayTitle()
+  // keep the desktop widgets in sync
+  publishWidgetSnapshot()
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('db:changed')
   if (BrowserWindow.getAllWindows().some((w) => w !== mainWindow)) {
     for (const w of BrowserWindow.getAllWindows()) {
@@ -725,6 +675,10 @@ function registerIpc() {
   h('settings:set', (k, v) => {
     db.setSetting(k, v)
     // a new location / API must not be masked by the cached payload
+    if (k === 'quickSectionOrder' || k === 'quickModules') {
+      // the quick panel must apply the new order / visibility immediately
+      broadcast('quick:sectionOrder', v)
+    }
     if (['weatherCity', 'weatherMode', 'weatherApiBase', 'weatherApiKey'].includes(k)) {
       invalidateWeatherCache()
       broadcast('weather:changed', { reason: k })
@@ -823,6 +777,25 @@ function registerIpc() {
   h('backup:run', () => {
     const r = runBackup()
     if (r.ok) broadcastChanged()
+    return r
+  })
+  h('backup:restore', async () => {
+    // let the user pick the archive.
+    // The dialog MUST be parented to the main window: a parentless native
+    // dialog opens BEHIND the app on macOS — which is what hid it behind
+    // the settings dialog.
+    const res = await dialog.showOpenDialog(mainWindow, {
+      title: '选择备份文件',
+      defaultPath: path.join(app.getPath('documents'), 'Tomatodo'),
+      filters: [{ name: 'Tomatodo 备份', extensions: ['zip'] }, { name: '所有文件', extensions: ['*'] }],
+      properties: ['openFile']
+    })
+    if (res.canceled || !res.filePaths.length) return { ok: false, canceled: true }
+    const r = restoreFromBackup(res.filePaths[0])
+    if (r.ok) {
+      broadcastChanged()
+      broadcast('db:changed')
+    }
     return r
   })
   h('backup:open', () => openBackupDir())
@@ -977,6 +950,12 @@ app.whenReady().then(() => {
 
   // scheduled backups (also catches a slot missed while the app was closed)
   startBackupScheduler()
+  // make the widget extension discoverable (the widget gallery reads the
+  // LaunchServices / ExtensionKit database — after an in-place upgrade the
+  // bundle changed and the old registration no longer applies)
+  registerWidgetExtension()
+  // first widget snapshot
+  setTimeout(() => publishWidgetSnapshot(), 1500)
 
   // dock/window icon (dev shows the default Electron icon otherwise)
   try {
