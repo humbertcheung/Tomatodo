@@ -134,6 +134,18 @@ function noteText(n) {
   return htmlToText(n?.content || '')
 }
 
+/** the note body as HTML — line breaks and lists render properly */
+function asHtml(html) {
+  const raw = String(html || '')
+  if (!raw) return ''
+  if (/<[a-z][\s\S]*>/i.test(raw)) return raw
+  return raw
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br>')
+}
+const taskNoteHtml = (task) => asHtml(task?.note_html || '')
+const noteHtml = (n) => asHtml(n?.content || '')
+
 async function add(e) {
   if (e && (e.isComposing || e.keyCode === 229)) return // IME composition Enter
   const v = subject.value.trim()
@@ -245,7 +257,7 @@ onMounted(async () => {
                 </span>
               </span>
               <span v-if="isOpen(task.id)" class="qtask-more">
-                <span v-if="task.note_html" class="qtask-note">{{ htmlToText(task.note_html) }}</span>
+                <span v-if="task.note_html" class="qtask-note qrich" v-html="taskNoteHtml(task)"></span>
                 <span v-else class="qtask-note dim">{{ t('quick.noMore') }}</span>
               </span>
             </button>
@@ -274,7 +286,7 @@ onMounted(async () => {
                 <span class="qtag date">{{ (n.updated_at || '').slice(0, 10) }}</span>
               </span>
               <span v-if="isOpen(n.id)" class="qtask-more">
-                <span class="qtask-note">{{ noteText(n) }}</span>
+                <span class="qtask-note qrich" v-html="noteHtml(n)"></span>
                 <button class="qopen-btn" @click.stop="openNote(n)">
                   {{ t('quick.openNote') }} <ExternalLink :size="11" />
                 </button>
@@ -498,6 +510,14 @@ onMounted(async () => {
   overflow-y: auto;
 }
 .qtask-note.dim { color: var(--fg-tertiary); font-style: italic; }
+/* the expanded body renders the note's RTF-derived HTML */
+.qrich :deep(p) { margin: 0 0 4px; }
+.qrich :deep(p:last-child) { margin-bottom: 0; }
+.qrich :deep(ul), .qrich :deep(ol) { margin: 0 0 4px; padding-left: 1.3em; }
+.qrich :deep(ul:last-child), .qrich :deep(ol:last-child) { margin-bottom: 0; }
+.qrich :deep(li) { margin: 0 0 2px; }
+.qrich :deep(b), .qrich :deep(strong) { font-weight: 700; }
+.qrich :deep(img) { max-width: 100%; border-radius: 6px; margin: 2px 0; }
 .qcaret {
   color: var(--fg-tertiary);
   flex-shrink: 0;

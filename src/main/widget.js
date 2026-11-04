@@ -2,48 +2,29 @@
  * Widget bridge — publishes a small JSON snapshot for the WidgetKit
  * extension, so the desktop widgets can render without touching the
  * database (and without a SQLite dependency in the extension).
+ *
+ * Data channel: the App Group container
+ *   ~/Library/Group Containers/HDEN58Z6QL.group.cc.humbert.tomatodo/
+ * The app (not sandboxed) writes the snapshot AND polls the pending-action
+ * file the widget's intents write (toggle task, …).
  */
 import fs from 'node:fs'
 import path from 'node:path'
-import { app } from 'electron'
-import { querySmartList, listNotes, overviewForTray } from './db.js'
+import { app, BrowserWindow } from 'electron'
+import { querySmartList, listNotes, overviewForTray, getTask, updateTask } from './db.js'
 import { getPomodoro } from './pomodoro.js'
 
-const APP_GROUP = 'group.com.humbert.tomatodo'
+const TEAM_ID = 'HDEN58Z6QL'
+const GROUP = `${TEAM_ID}.group.cc.humbert.tomatodo`
 const FILE_NAME = 'widget-snapshot.json'
+const ACTIONS_NAME = 'widget-actions.json'
 
-function containerURL() {
-  // The App Group container only exists once the app is signed with the
-  // matching entitlement, so it is optional.
-  try {
-    const home = app.getPath('home')
-    const group = path.join(home, 'Library', 'Group Containers', APP_GROUP)
-    return fs.existsSync(group) ? group : null
-  } catch { return null }
+function groupContainerDir() {
+  return path.join(app.getPath('home'), 'Library', 'Group Containers', GROUP)
 }
 
-const WIDGET_BUNDLE_ID = 'cc.humbert.todo-menubar.widget'
-
-/**
- * The widget extension is SANDBOXED, so it can only read its own container.
- * The app is not sandboxed and may write there directly — that is the data
- * channel (an App Group would need a provisioning profile we do not have).
- */
-function widgetContainerFile() {
-  try {
-    const home = app.getPath('home')
-    return path.join(home, 'Library', 'Containers', WIDGET_BUNDLE_ID, 'Data', 'Documents', 'widget-snapshot.json')
-  } catch { return null }
-}
-
-/**
- * Fallback location: the app's own data folder — used when the extension is
- * not sandboxed.
- */
-function sharedFolderURL() {
-  try {
-    return path.join(app.getPath('userData'), 'widget-snapshot.json')
-  } catch { return null }
+function groupFile(name) {
+  return path.join(groupContainerDir(), name)
 }
 
 function todayYMD() {
@@ -102,40 +83,63 @@ export function buildSnapshot() {
 }
 
 /**
- * Write the snapshot into the App Group container.
- * Silently does nothing when the group container is not available
- * (e.g. the app is not signed with the App Group entitlement).
+ * Publish the snapshot into the app's data folder — the extension (not
+ * sandboxed) reads it from there directly.
  */
 export function publishWidgetSnapshot() {
   try {
-    const snap = buildSnapshot()
-    const payload = JSON.stringify(snap)
-    let wrote = false
-
-    // 1) the App Group (the proper channel — used when the app is signed
-    //    with the matching entitlement)
-    const dir = containerURL()
-    if (dir) {
-      fs.writeFileSync(path.join(dir, FILE_NAME), payload, 'utf8')
-      wrote = true
-    }
-    // 2) the widget's sandbox container — this is what a sandboxed
-    //    extension can actually read
-    const container = widgetContainerFile()
-    if (container) {
-      fs.mkdirSync(path.dirname(container), { recursive: true })
-      fs.writeFileSync(container, payload, 'utf8')
-      wrote = true
-    }
-    // 3) the app's own data folder — the fallback for a non-sandboxed build
-    const shared = sharedFolderURL()
-    if (shared) {
-      fs.writeFileSync(shared, payload, 'utf8')
-      wrote = true
-    }
-    return wrote
+    const payload = JSON.stringify(buildSnapshot())
+    fs.writeFileSync(path.join(app.getPath('userData'), FILE_NAME), payload, 'utf8')
+    return true
   } catch (e) {
     console.error('WIDGET PUBLISH FAILED:', e?.message || e)
     return false
   }
+}
+
+/**
+ * Apply the actions the widget intents queued in the app's data folder.
+ */
+function applyWidgetActions() {
+  const file = path.join(app.getPath('userData'), ACTIONS_NAME)
+  let list
+  try {
+    if (!fs.existsSync(file)) return
+    list = JSON.parse(fs.readFileSync(file, 'utf8'))
+  } catch { return }
+  if (!Array.isArray(list) || !list.length) return
+
+  let applied = 0
+  for (const a of list) {
+    try {
+      if (a.type === 'toggleTask' && a.id) {
+        const t = getTask(a.id)
+        if (t) {
+          const done = t.status === 'completed'
+          updateTask(a.id, {
+            status: done ? 'notCompleted' : 'completed',
+            completed_at: done ? null : new Date().toISOString()
+          })
+          applied++
+        }
+      }
+    } catch { /* skip one bad action */ }
+  }
+  try { fs.writeFileSync(file, '[]', 'utf8') } catch { /* ignore */ }
+  if (applied) {
+    console.log(`[widget] applied ${applied} action(s)`)
+    // tell every renderer the data changed (no import cycle: send directly)
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (!w.isDestroyed()) w.webContents.send('db:changed')
+    }
+  }
+}
+
+let actionsTimer = null
+
+/** start polling the widget's pending actions (every 2 s) */
+export function startWidgetActionBridge() {
+  if (actionsTimer) return
+  applyWidgetActions()
+  actionsTimer = setInterval(applyWidgetActions, 2000)
 }

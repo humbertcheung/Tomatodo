@@ -270,11 +270,23 @@ onBeforeUnmount(() => window.removeEventListener('locate-note', onLocate))
   border-color: color-mix(in srgb, var(--theme-orange) 18%, transparent);
 }
 
-.nc-top { display: flex; align-items: center; margin: -2px -6px 4px 0; }
+.nc-top { position: relative; display: flex; align-items: center; margin: -2px -6px 4px 0; min-height: 24px; }
 .nc-pin { color: currentColor; opacity: 0.35; display: inline-flex; transform: rotate(35deg); }
 .nc-pin.on { opacity: 1; transform: none; }
-.nc-actions { margin-left: auto; display: none; gap: 2px; }
-.note-card:hover .nc-actions { display: flex; }
+/* the actions are pulled out of the flow and cross-fade — reserving space or
+   toggling display made the card's content shift (and its height jump) on
+   hover, which read as jitter */
+.nc-actions {
+  position: absolute;
+  right: -6px; top: 50%;
+  transform: translateY(-50%);
+  display: flex; gap: 2px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t-fast);
+  z-index: 2;
+}
+.note-card:hover .nc-actions { opacity: 1; pointer-events: auto; }
 .nc-actions .icon-btn { color: currentColor; background: transparent; width: 24px; height: 24px; }
 .nc-actions .icon-btn:hover { background: rgba(0,0,0,0.08); }
 .rotate { transform: rotate(45deg); }

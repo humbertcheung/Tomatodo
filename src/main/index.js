@@ -14,7 +14,7 @@ import { setMiniLang } from '@shared/i18n-mini'
 import { deriveNextOccurrence } from '@shared/recurrence'
 import { getPomodoro, startPomodoro, pausePomodoro, resetPomodoro, restorePomodoro, setPomodoroTickHook } from './pomodoro'
 import { getWeather, invalidateWeatherCache } from './weather'
-import { publishWidgetSnapshot } from './widget.js'
+import { publishWidgetSnapshot, startWidgetActionBridge } from './widget.js'
 import { htmlToRtf, htmlToText, rtfToHtml } from '@shared/rtf'
 import { backupStatus, backupStatusAfter, runBackup, restoreFromBackup, openBackupDir, openNotesDir, startBackupScheduler } from './backup'
 
@@ -459,6 +459,10 @@ function createMainWindow() {
                 o.noteWeight = document.querySelector('.qn-title')
                   ? getComputedStyle(document.querySelector('.qn-title')).fontWeight : null
                 o.pinBtn = !!document.querySelector('.qpin')
+                document.querySelector('.qn-title')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+                await sleep(500)
+                const rich = document.querySelector('.qrich')
+                o.rich = { present: !!rich, br: rich ? rich.innerHTML.includes('<br>') : false, p: rich ? rich.innerHTML.includes('<p') : false }
                 // expand a note row and click 打开 — the popup chain
                 document.querySelector('.qn-title')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
                 await sleep(400)
@@ -582,12 +586,23 @@ function updateBadge() {
 }
 
 function handleDeepLink(url) {
+  const u = String(url || '')
   // observed scheme shape: ms-to-do://tasks/<id> — open the main window on that task
-  const m = String(url).match(/^ms-to-do:\/\/tasks\/(.+)$/)
+  let m = u.match(/^ms-to-do:\/\/tasks\/(.+)$/)
   if (m && mainWindow) {
     openMainWindow()
     mainWindow.webContents.send('app:openTask', m[1])
+    return
   }
+  // our own scheme (the desktop widgets deep-link here):
+  //   tomatodo://task/<id> · tomatodo://note/<id> · tomatodo://open
+  m = u.match(/^tomatodo:\/\/(task|note)\/(.+)$/)
+  if (m) {
+    openMainWindow()
+    mainWindow.webContents.send(m[1] === 'task' ? 'app:openTask' : 'app:openNote', decodeURIComponent(m[2]))
+    return
+  }
+  if (u.startsWith('tomatodo://')) openMainWindow()
 }
 
 function sendCommand(cmd) {
@@ -944,6 +959,13 @@ function safeJSON(s) {
 
 // ---------- lifecycle ----------
 
+// the desktop widgets deep-link into the app through this scheme
+if (process.defaultApp) {
+  app.setAsDefaultProtocolClient('tomatodo', process.execPath, [path.resolve(process.argv[1])])
+} else {
+  app.setAsDefaultProtocolClient('tomatodo')
+}
+
 app.whenReady().then(() => {
   const info = db.openDatabase(app.getPath('userData'))
   console.log('[Tomatodo] sqlite driver:', info.driver, '→', info.file)
@@ -956,6 +978,8 @@ app.whenReady().then(() => {
   registerWidgetExtension()
   // first widget snapshot
   setTimeout(() => publishWidgetSnapshot(), 1500)
+  // apply the actions the widget intents queued
+  startWidgetActionBridge()
 
   // dock/window icon (dev shows the default Electron icon otherwise)
   try {

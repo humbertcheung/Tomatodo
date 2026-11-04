@@ -2,7 +2,7 @@
 import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { state, updateNote, deleteNote, askConfirm, NOTE_COLORS } from '../store'
 import { t } from '../i18n'
-import { X, Pin, PinOff, Trash2 } from 'lucide-vue-next'
+import { X, Pin, PinOff, Trash2, List, ListOrdered } from 'lucide-vue-next'
 
 const props = defineProps({ noteId: { type: String, required: true } })
 const emit = defineEmits(['close'])
@@ -106,8 +106,8 @@ function fmtDate(iso) {
         <button class="nd-fmt" @mousedown.prevent="fmtCmd('bold')"><b>B</b></button>
         <button class="nd-fmt" @mousedown.prevent="fmtCmd('italic')"><i>I</i></button>
         <button class="nd-fmt" @mousedown.prevent="fmtCmd('underline')"><u>U</u></button>
-        <button class="nd-fmt" @mousedown.prevent="fmtCmd('insertUnorderedList')">≡</button>
-        <button class="nd-fmt" @mousedown.prevent="fmtCmd('insertOrderedList')">⒈</button>
+        <button class="nd-fmt" :aria-label="t('task.listUnordered')" @mousedown.prevent="fmtCmd('insertUnorderedList')"><List :size="13" /></button>
+        <button class="nd-fmt" :aria-label="t('task.listOrdered')" @mousedown.prevent="fmtCmd('insertOrderedList')"><ListOrdered :size="13" /></button>
       </div>
       <input
         v-model="title"

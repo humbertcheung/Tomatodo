@@ -6,6 +6,8 @@
 	<string>zh_CN</string>
 	<key>CFBundleDisplayName</key>
 	<string>Tomatodo</string>
+	<key>CFBundleIconFile</key>
+	<string>icon.icns</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

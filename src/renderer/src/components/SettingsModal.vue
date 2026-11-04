@@ -500,6 +500,16 @@ const bgPreview = computed(() => {
                 <label>{{ t('settings.dueTodayTime') }}</label>
                 <input type="time" class="set-input time" :value="state.settings.dueTodayTime ?? '09:00'" @change="setSetting('dueTodayTime', $event.target.value)" />
               </div>
+              <div class="set-row">
+                <label>{{ t('settings.weatherAlertNotify') }}</label>
+                <div>
+                  <label class="switch">
+                    <input type="checkbox" :checked="state.settings.weatherAlertNotify ?? true" @change="setSetting('weatherAlertNotify', $event.target.checked)" />
+                    <span class="switch-track"><span class="switch-knob"></span></span>
+                  </label>
+                  <div class="set-hint full">{{ t('settings.weatherAlertNotifyHint') }}</div>
+                </div>
+              </div>
             </template>
 
             <!-- data -->

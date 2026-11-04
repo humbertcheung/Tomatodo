@@ -5,7 +5,7 @@
          <BuildActionEntry buildForTesting = "YES" buildForRunning = "YES" buildForProfiling = "YES" buildForArchiving = "YES" buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "AA00050000000000000000000000"
+               BlueprintIdentifier = "AA00070000000000000000000000"
                BuildableName = "TomatodoWidget.appex"
                BlueprintName = "TomatodoWidget"
                ReferencedContainer = "container:TomatodoWidget.xcodeproj">

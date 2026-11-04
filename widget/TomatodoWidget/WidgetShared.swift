@@ -47,42 +47,60 @@ struct WidgetSnapshot: Codable {
 
 enum WidgetStore {
     /// App Group used by both the app and the widget.
-    static let appGroup = "group.com.humbert.tomatodo"
+    /// TEAM-ID-prefixed groups work with Developer ID signing (no profile).
+    static let appGroup = "HDEN58Z6QL.group.cc.humbert.tomatodo"
+    static let widgetBundleID = "cc.humbert.todo-menubar.widget"
     static let fileName = "widget-snapshot.json"
+    static let actionsName = "widget-actions.json"
 
-    static var containerURL: URL? {
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)
+    static var groupContainerURL: URL? {
+        FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: appGroup
+        )
     }
 
-    static var snapshotURL: URL? {
-        containerURL?.appendingPathComponent(fileName)
-    }
-
-    /// The extension is sandboxed: it may only read its own container.
-    /// The app writes the snapshot into that container's Documents folder.
-    static var containerSnapshotURL: URL? {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        return home
-            .appendingPathComponent("Library/Containers/cc.humbert.todo-menubar.widget/Data/Documents")
-            .appendingPathComponent(fileName)
-    }
-
-    /// Fallback: the app's data folder (used when the extension is not sandboxed).
-    static var sharedSnapshotURL: URL? {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        return home
+    /// Every place the snapshot may live, in preference order.
+    /// NB: inside the sandbox, NSHomeDirectory() IS this container's Data
+    /// folder — the naive absolute path would nest the container inside
+    /// itself, which is why the naive lookup found nothing.
+    static var snapshotCandidates: [URL] {
+        var list: [URL] = []
+        if let group = groupContainerURL {
+            list.append(group.appendingPathComponent(fileName))
+        }
+        // the app's data folder — the primary channel for a NON-sandboxed
+        // extension (the app keeps writing there)
+        list.append(URL(fileURLWithPath: NSHomeDirectory())
             .appendingPathComponent("Library/Application Support/Tomatodo")
-            .appendingPathComponent(fileName)
+            .appendingPathComponent(fileName))
+        list.append(URL(fileURLWithPath: NSHomeDirectory())
+            .appendingPathComponent("Documents")
+            .appendingPathComponent(fileName))
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        list.append(home
+            .appendingPathComponent("Library/Containers/\(widgetBundleID)/Data/Documents")
+            .appendingPathComponent(fileName))
+        return list
     }
 
-    /// Read the snapshot written by the app.
-    static func load() -> WidgetSnapshot {
-        // App Group → the sandbox container → the shared data folder
-        let url = snapshotURL ?? containerSnapshotURL ?? sharedSnapshotURL
-        guard let url, let data = try? Data(contentsOf: url) else { return .empty }
+    static func load() -> (snapshot: WidgetSnapshot, found: Bool) {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return (try? decoder.decode(WidgetSnapshot.self, from: data)) ?? .empty
+        for url in snapshotCandidates {
+            if let data = try? Data(contentsOf: url),
+               let snap = try? decoder.decode(WidgetSnapshot.self, from: data) {
+                return (snap, true)
+            }
+        }
+        return (.empty, false)
+    }
+
+    /// Where the widget writes its pending actions (the app polls this file).
+    /// the pending-actions file in the app's data folder (non-sandboxed read/write)
+    static var actionsURL: URL? {
+        URL(fileURLWithPath: NSHomeDirectory())
+            .appendingPathComponent("Library/Application Support/Tomatodo")
+            .appendingPathComponent(actionsName)
     }
 }
 

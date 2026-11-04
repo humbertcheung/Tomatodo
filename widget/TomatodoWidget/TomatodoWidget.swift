@@ -6,29 +6,78 @@
 //   2. 已计划    — everything that has a due date, sorted
 //   3. 便签      — the latest notes
 //
+//  Interactivity:
+//   • the check button on each task toggles completion (AppIntent → the app
+//     applies it from the pending-actions file in the group container)
+//   • each row is a Link that deep-links into the app (tomatodo://…)
+//
 
 import WidgetKit
 import SwiftUI
+import AppIntents
+
+// MARK: - Pending-action intent
+
+/// Toggling a task from the widget cannot touch the app's SQLite database
+/// directly (the extension is sandboxed), so the intent writes a pending
+/// action into the group container; the running app polls that file, applies
+/// it and republishes the snapshot.
+struct ToggleTaskIntent: AppIntent {
+    static let title: LocalizedStringResource = "切换待办完成状态"
+    static let description = IntentDescription("在 Tomatodo 中切换该待办的完成状态")
+
+    @Parameter(title: "任务 ID") var taskID: String
+
+    init() {}
+
+    init(taskID: String) {
+        self.taskID = taskID
+    }
+
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        guard let target = WidgetStore.actionsURL else {
+            return .result(dialog: IntentDialog("数据通道不可用"))
+        }
+        var actions: [[String: String]] = []
+        if let data = try? Data(contentsOf: target),
+           let list = try? JSONSerialization.jsonObject(with: data) as? [[String: String]] {
+            actions = list
+        }
+        actions.append([
+            "type": "toggleTask",
+            "id": taskID,
+            "at": ISO8601DateFormatter().string(from: Date())
+        ])
+        if let data = try? JSONSerialization.data(withJSONObject: actions) {
+            try? data.write(to: target)
+        }
+        // re-render once the app has (usually) applied the action
+        WidgetCenter.shared.reloadAllTimelines()
+        return .result(dialog: IntentDialog("已更新 ✓"))
+    }
+}
 
 // MARK: - Timeline
 
 struct WidgetEntry: TimelineEntry {
     let date: Date
     let snapshot: WidgetSnapshot
+    let found: Bool          // was a snapshot file readable at all?
 }
 
 struct WidgetProvider: TimelineProvider {
     func placeholder(in context: Context) -> WidgetEntry {
-        WidgetEntry(date: Date(), snapshot: .empty)
+        WidgetEntry(date: Date(), snapshot: .empty, found: true)
     }
     func getSnapshot(in context: Context, completion: @escaping (WidgetEntry) -> Void) {
-        completion(WidgetEntry(date: Date(), snapshot: WidgetStore.load()))
+        let (snap, found) = WidgetStore.load()
+        completion(WidgetEntry(date: Date(), snapshot: snap, found: found))
     }
     func getTimeline(in context: Context, completion: @escaping (Timeline<WidgetEntry>) -> Void) {
-        let snap = WidgetStore.load()
-        // refresh every 15 minutes (or sooner while a pomodoro runs)
-        let next = Date().addingTimeInterval(snap.pomodoroRunning ? 60 : 15 * 60)
-        completion(Timeline(entries: [WidgetEntry(date: Date(), snapshot: snap)], policy: .after(next)))
+        let (snap, found) = WidgetStore.load()
+        // refresh every 5 minutes (or sooner while a pomodoro runs)
+        let next = Date().addingTimeInterval(snap.pomodoroRunning ? 60 : 5 * 60)
+        completion(Timeline(entries: [WidgetEntry(date: Date(), snapshot: snap, found: found)], policy: .after(next)))
     }
 }
 
@@ -76,6 +125,61 @@ private func colorFor(_ name: String) -> Color {
     }
 }
 
+/// the empty state, distinguishing "no data" from "snapshot missing"
+@ViewBuilder
+private func emptyHint(_ found: Bool, noData: String) -> some View {
+    if found {
+        Text(noData).font(.system(size: 11)).foregroundStyle(.secondary)
+    } else {
+        Text("打开 Tomatodo 以同步数据").font(.system(size: 11)).foregroundStyle(.secondary)
+    }
+}
+
+/// the check button — a real, working AppIntent button
+private struct CheckButton: View {
+    let taskID: String
+    var body: some View {
+        Button(intent: ToggleTaskIntent(taskID: taskID)) {
+            Circle()
+                .strokeBorder(Color.secondary.opacity(0.6), lineWidth: 1.2)
+                .frame(width: 12, height: 12)
+                .background(Circle().fill(Color.clear))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// a task row: tappable through to the matching task in the app
+private struct TaskRowLink: View {
+    let task: WidgetTask
+    var body: some View {
+        if let url = URL(string: "tomatodo://task/\(task.id)") {
+            Link(destination: url) { rowContent }
+        } else {
+            rowContent
+        }
+    }
+
+    private var rowContent: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(task.subject)
+                .font(.system(size: 12, weight: .semibold))
+                .lineLimit(1)
+            HStack(spacing: 4) {
+                let overdue = WidgetFormat.isOverdue(task.due)
+                TagChip(
+                    text: WidgetFormat.dueLabel(task.due),
+                    tint: overdue ? Color(red: 0.85, green: 0.31, blue: 0.21) : Color(red: 0.88, green: 0.49, blue: 0.17)
+                )
+                if task.important {
+                    TagChip(text: "重要", tint: Color(red: 0.78, green: 0.23, blue: 0.36))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 // MARK: - 1. 今日待办
 
 struct TodayWidgetView: View {
@@ -99,28 +203,19 @@ struct TodayWidgetView: View {
             }
 
             if entry.snapshot.today.isEmpty {
-                Text("今天没有待办 ☀").font(.system(size: 11)).foregroundStyle(.secondary)
+                emptyHint(entry.found, noData: "今天没有待办 ☀")
                 Spacer(minLength: 0)
             } else {
                 ForEach(entry.snapshot.today.prefix(family == .systemSmall ? 3 : 6)) { task in
                     HStack(alignment: .top, spacing: 6) {
-                        Circle()
-                            .strokeBorder(Color.secondary.opacity(0.6), lineWidth: 1.2)
-                            .frame(width: 11, height: 11)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(task.subject)
-                                .font(.system(size: 12))
-                                .lineLimit(1)
-                            if task.important {
-                                TagChip(text: "重要", tint: Color(red: 0.78, green: 0.23, blue: 0.36))
-                            }
-                        }
-                        Spacer(minLength: 0)
+                        CheckButton(taskID: task.id)
+                        TaskRowLink(task: task)
                     }
                 }
                 Spacer(minLength: 0)
             }
         }
+        .widgetURL(URL(string: "tomatodo://open"))
     }
 }
 
@@ -142,34 +237,57 @@ struct PlannedWidgetView: View {
             }
 
             if entry.snapshot.planned.isEmpty {
-                Text("还没有计划中的任务").font(.system(size: 11)).foregroundStyle(.secondary)
+                emptyHint(entry.found, noData: "还没有计划中的任务")
                 Spacer(minLength: 0)
             } else {
                 ForEach(entry.snapshot.planned.prefix(family == .systemSmall ? 3 : 6)) { task in
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(task.subject)
-                            .font(.system(size: 12))
-                            .lineLimit(1)
-                        HStack(spacing: 4) {
-                            let overdue = WidgetFormat.isOverdue(task.due)
-                            TagChip(
-                                text: WidgetFormat.dueLabel(task.due),
-                                tint: overdue ? Color(red: 0.85, green: 0.31, blue: 0.21) : Color(red: 0.88, green: 0.49, blue: 0.17)
-                            )
-                            if task.important {
-                                TagChip(text: "重要", tint: Color(red: 0.78, green: 0.23, blue: 0.36))
-                            }
-                        }
+                    HStack(alignment: .top, spacing: 6) {
+                        CheckButton(taskID: task.id)
+                        TaskRowLink(task: task)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 Spacer(minLength: 0)
             }
         }
+        .widgetURL(URL(string: "tomatodo://open"))
     }
 }
 
 // MARK: - 3. 便签
+
+private struct NoteRowLink: View {
+    let note: WidgetNote
+    var body: some View {
+        if let url = URL(string: "tomatodo://note/\(note.id)") {
+            Link(destination: url) { rowContent }
+        } else {
+            rowContent
+        }
+    }
+
+    private var rowContent: some View {
+        HStack(alignment: .top, spacing: 6) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(colorFor(note.color))
+                .frame(width: 3)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(note.title.isEmpty ? "未命名" : note.title)
+                    .font(.system(size: 12, weight: .medium))
+                    .lineLimit(1)
+                if !note.preview.isEmpty {
+                    Text(note.preview)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+            if note.pinned {
+                Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(.orange)
+            }
+        }
+    }
+}
 
 struct NotesWidgetView: View {
     let entry: WidgetEntry
@@ -187,34 +305,16 @@ struct NotesWidgetView: View {
             }
 
             if entry.snapshot.notes.isEmpty {
-                Text("还没有便签").font(.system(size: 11)).foregroundStyle(.secondary)
+                emptyHint(entry.found, noData: "还没有便签")
                 Spacer(minLength: 0)
             } else {
                 ForEach(entry.snapshot.notes.prefix(family == .systemSmall ? 3 : 6)) { note in
-                    HStack(alignment: .top, spacing: 6) {
-                        RoundedRectangle(cornerRadius: 2, style: .continuous)
-                            .fill(colorFor(note.color))
-                            .frame(width: 3)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(note.title.isEmpty ? "未命名" : note.title)
-                                .font(.system(size: 12, weight: .medium))
-                                .lineLimit(1)
-                            if !note.preview.isEmpty {
-                                Text(note.preview)
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                        }
-                        Spacer(minLength: 0)
-                        if note.pinned {
-                            Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(.orange)
-                        }
-                    }
+                    NoteRowLink(note: note)
                 }
                 Spacer(minLength: 0)
             }
         }
+        .widgetURL(URL(string: "tomatodo://open"))
     }
 }
 

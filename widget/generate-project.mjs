@@ -17,6 +17,16 @@ const APP_GROUP = 'group.com.humbert.tomatodo'
 const BUNDLE_ID = 'cc.humbert.todo-menubar.widget'
 const SOURCES = ['WidgetShared.swift', 'TomatodoWidget.swift']
 
+// The widget gallery shows the EXTENSION's bundle icon — without one macOS
+// renders a generic placeholder instead of the tomato logo.
+const ICON_SRC = path.join(here, '..', 'resources', 'icon.icns')
+const ICON_DST = path.join(here, 'TomatodoWidget', 'icon.icns')
+try {
+  fs.copyFileSync(ICON_SRC, ICON_DST)
+} catch (e) {
+  console.warn('icon.icns copy failed:', e.message)
+}
+
 // The app extension's version MUST match the host app's — macOS refuses to
 // register an extension whose version differs, and the widget then never
 // shows up in the widget gallery.
@@ -34,7 +44,9 @@ const id = (key) => {
   return ids[key]
 }
 
-const fileRefs = SOURCES.map((f) => ({ name: f, path: 'TomatodoWidget/' + f, ref: id('ref' + f), build: id('build' + f) }))
+const fileRefs = SOURCES.map((f) => ({ name: f, ref: id('ref' + f), build: id('build' + f) }))
+const ICON_REF = id('iconRef')
+const ICON_BUILD = id('iconBuild')
 const PRODUCT_REF = id('productRef')
 const TARGET_ID = id('target')
 const PROJECT_ID = id('project')
@@ -64,10 +76,12 @@ const pbx = `// !$*UTF8*$!
 
 /* Begin PBXBuildFile section */
 ${fileRefs.map((f) => `\t\t${f.build} /* ${f.name} in Sources */ = {isa = PBXBuildFile; fileRef = ${f.ref} /* ${f.name} */; };`).join('\n')}
+\t\t${ICON_BUILD} /* icon.icns in Resources */ = {isa = PBXBuildFile; fileRef = ${ICON_REF} /* icon.icns */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-${fileRefs.map((f) => `\t\t${f.ref} /* ${f.name} */ = {isa = PBXFileReference; lastKnownFileType = ${fileType(f.name)}; path = ${f.path}; sourceTree = "<group>"; };`).join('\n')}
+${fileRefs.map((f) => `\t\t${f.ref} /* ${f.name} */ = {isa = PBXFileReference; lastKnownFileType = ${fileType(f.name)}; path = ${f.name}; sourceTree = "<group>"; };`).join('\n')}
+\t\t${ICON_REF} /* icon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = icon.icns; sourceTree = "<group>"; };
 \t\t${PRODUCT_REF} /* TomatodoWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TomatodoWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 \t\t${ENTITLEMENTS} /* TomatodoWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TomatodoWidget.entitlements; sourceTree = "<group>"; };
 \t\t${INFO_PLIST} /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -88,10 +102,12 @@ ${fileRefs.map((f) => `\t\t${f.ref} /* ${f.name} */ = {isa = PBXFileReference; l
 \t\t\tisa = PBXGroup;
 \t\t\tchildren = (
 ${fileRefs.map((f) => `\t\t\t\t${f.ref} /* ${f.name} */,`).join('\n')}
+\t\t\t\t${ICON_REF} /* icon.icns */,
 \t\t\t\t${ENTITLEMENTS} /* TomatodoWidget.entitlements */,
 \t\t\t\t${INFO_PLIST} /* Info.plist */,
 \t\t\t\t${GROUP_PRODUCTS} /* Products */,
 \t\t\t);
+\t\t\tpath = TomatodoWidget;
 \t\t\tsourceTree = "<group>";
 \t\t};
 \t\t${GROUP_PRODUCTS} /* Products */ = {
@@ -99,7 +115,7 @@ ${fileRefs.map((f) => `\t\t\t\t${f.ref} /* ${f.name} */,`).join('\n')}
 \t\t\tchildren = (
 \t\t\t\t${PRODUCT_REF} /* TomatodoWidget.appex */,
 \t\t\t);
-\t\t\tpath = TomatodoWidget;
+\t\t\tname = Products;
 \t\t\tsourceTree = "<group>";
 \t\t};
 /* End PBXGroup section */
@@ -161,6 +177,7 @@ ${fileRefs.map((f) => `\t\t\t\t${f.ref} /* ${f.name} */,`).join('\n')}
 \t\t\tisa = PBXResourcesBuildPhase;
 \t\t\tbuildActionMask = 2147483647;
 \t\t\tfiles = (
+\t\t\t\t${ICON_BUILD} /* icon.icns in Resources */,
 \t\t\t);
 \t\t\trunOnlyForDeploymentPostprocessing = 0;
 \t\t};

@@ -3,7 +3,7 @@
  * with a Beijing fallback; 30-minute in-memory cache; last payload persisted
  * for offline display.
  */
-import { net } from 'electron'
+import { net, Notification } from 'electron'
 import { getSetting, setSetting } from './db.js'
 
 let cache = { at: 0, data: null }
@@ -204,6 +204,32 @@ export function invalidateWeatherCache() {
   try { setSetting('weatherGeo', null) } catch { /* ignore */ }
 }
 
+/**
+ * Fire a system notification for every severe-weather alert that has not
+ * been shown today (the dedupe list resets at midnight).
+ */
+function notifySevereWeather(data) {
+  try {
+    if (!getSetting('weatherAlertNotify', true)) return
+    if (!data?.ok || !Array.isArray(data.alerts) || !data.alerts.length) return
+    if (!Notification.isSupported()) return
+    const today = new Date().toISOString().slice(0, 10)
+    const fired = getSetting('weatherAlertsFired', {}) || {}
+    const already = fired.date === today ? fired.items : []
+    const fresh = data.alerts.filter((a) => !already.includes(a))
+    if (!fresh.length) return
+    for (const a of fresh.slice(0, 3)) {
+      const n = new Notification({
+        title: 'Tomatodo · 恶劣天气提醒',
+        body: `${data.city}: ${a}`
+      })
+      n.on('click', () => { /* the main window is already the surface for this */ })
+      n.show()
+    }
+    setSetting('weatherAlertsFired', { date: today, items: [...already, ...fresh] })
+  } catch { /* best effort */ }
+}
+
 export async function getWeather() {
   const lang = 'zh'
   if (cache.data && Date.now() - cache.at < TTL) return cache.data
@@ -262,7 +288,8 @@ export async function getWeather() {
       days,
       alerts: deriveAlerts(raw.current, raw.daily)
     }
-    cache = { at: Date.now(), data }
+    cache = { at: Date.now(), data };
+    notifySevereWeather(data)
     setSetting('weatherCache', data)
     return data
   } catch (e) {
