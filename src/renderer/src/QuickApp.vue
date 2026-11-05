@@ -5,7 +5,7 @@ import { parseSmartDate } from '@shared/nlp'
 import { htmlToText } from '@shared/rtf'
 import {
   Plus, Check, ArrowRight, Sun, CalendarDays, ListChecks, StickyNote, Search, Pin,
-  ChevronRight, Star, ExternalLink, Clock, Flame, Play, Pause, RotateCcw
+  ChevronRight, Star, ExternalLink, Clock, Flame, Play, Pause
 } from 'lucide-vue-next'
 
 const tomatoLogo = ref(null)
@@ -189,11 +189,6 @@ const pomoClock = computed(() => {
   const s = Math.max(0, Math.round(pomo.value.remainingMs / 1000))
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 })
-const pomoPct = computed(() => {
-  if (!pomo.value.totalMs) return 0
-  const p = 1 - pomo.value.remainingMs / pomo.value.totalMs
-  return Math.max(0, Math.min(100, Math.round(p * 100)))
-})
 /* the timer counts as "in use" once it was started (running or paused) */
 const pomoLive = computed(() => pomo.value.running || pomo.value.remainingMs < pomo.value.totalMs)
 
@@ -207,10 +202,6 @@ async function togglePomo() {
   } else {
     pomo.value = await window.api.pomodoro.start()
   }
-}
-
-async function resetPomo() {
-  pomo.value = await window.api.pomodoro.reset()
 }
 
 // 置顶: keep the panel above other windows
@@ -229,6 +220,27 @@ onMounted(async () => {
       <img v-if="tomatoLogo" class="qlogo-img" :src="tomatoLogo" alt="Tomatodo" />
       <div v-else class="qlogo"><ListChecks :size="15" /></div>
       <span class="qtitle">{{ t('quick.title') }}</span>
+      <!-- pomodoro shortcut: a small card left of the counts -->
+      <div class="qpomo" :class="{ live: pomoLive, brk: pomo.mode === 'break' }">
+        <button
+          class="qpomo-tomato"
+          :aria-label="pomo.running ? t('pomo.pause') : t('pomo.start')"
+          :title="pomo.running ? t('pomo.pause') : t('pomo.start')"
+          @click="togglePomo"
+        >
+          <img v-if="tomatoCutout" :src="tomatoCutout" alt="" />
+          <span v-else class="qpomo-dot"></span>
+        </button>
+        <span class="qpomo-clock">{{ pomoClock }}</span>
+        <button
+          class="qpomo-btn"
+          :aria-label="pomo.running ? t('pomo.pause') : t('pomo.start')"
+          :title="pomo.running ? t('pomo.pause') : t('pomo.start')"
+          @click="togglePomo"
+        >
+          <component :is="pomo.running ? Pause : Play" :size="11" />
+        </button>
+      </div>
       <span class="qcounts">
         <span class="qcount sun"><Sun :size="12" /> {{ data.overview.myday }}</span>
         <span class="qcount"><CalendarDays :size="12" /> {{ data.overview.due }}</span>
@@ -272,45 +284,6 @@ onMounted(async () => {
     <div class="qhint-row">
       <span v-if="hint" class="qhint">{{ hint }}</span>
       <span v-else class="qhint dim">{{ kind === 'todo' ? t('add.hint') : t('quick.placeholderNote') }}</span>
-    </div>
-
-    <!-- pomodoro shortcut — the same tomato card as the minimal focus mode -->
-    <div class="qpomo" :class="{ live: pomoLive, brk: pomo.mode === 'break' }">
-      <div class="qpomo-top">
-        <button
-          class="qpomo-tomato"
-          :aria-label="pomo.running ? t('pomo.pause') : t('pomo.start')"
-          :title="pomo.running ? t('pomo.pause') : t('pomo.start')"
-          @click="togglePomo"
-        >
-          <img v-if="tomatoCutout" :src="tomatoCutout" alt="" />
-          <span class="qpomo-clock">{{ pomoClock }}</span>
-        </button>
-        <div class="qpomo-meta">
-          <span class="qpomo-chip">{{ pomo.mode === 'break' ? t('focus.break') : t('focus.work') }}</span>
-          <span class="qpomo-sess">{{ t('focus.sessions', { n: pomo.sessionsToday }) }}</span>
-        </div>
-        <button
-          class="qpomo-btn"
-          :aria-label="pomo.running ? t('pomo.pause') : t('pomo.start')"
-          :title="pomo.running ? t('pomo.pause') : t('pomo.start')"
-          @click="togglePomo"
-        >
-          <component :is="pomo.running ? Pause : Play" :size="13" />
-        </button>
-        <button
-          class="qpomo-btn ghost"
-          :aria-label="t('pomo.reset')"
-          :title="t('pomo.reset')"
-          @click="resetPomo"
-        >
-          <RotateCcw :size="12" />
-        </button>
-      </div>
-      <div class="qpomo-bottom">
-        <span class="qpomo-bar"><span class="qpomo-fill" :style="{ width: pomoPct + '%' }"></span></span>
-        <span class="qpomo-pct">{{ pomoPct }}%</span>
-      </div>
     </div>
 
     <!-- unified scroll body -->
@@ -420,7 +393,7 @@ onMounted(async () => {
   display: flex; align-items: center; justify-content: center;
 }
 .qtitle { font-weight: 600; font-size: var(--fs-base); }
-.qcounts { margin-left: auto; display: flex; gap: 8px; }
+.qcounts { display: flex; gap: 8px; }
 .qcount {
   display: inline-flex; align-items: center; gap: 4px;
   font-size: var(--fs-xs); color: var(--fg-tertiary);
@@ -501,111 +474,72 @@ onMounted(async () => {
 .qhint { font-size: var(--fs-xs); color: var(--accent); font-weight: 500; }
 .qhint.dim { color: var(--fg-tertiary); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* ---------- pomodoro shortcut (the minimal focus mode's tomato card) ---------- */
+/* ---------- pomodoro shortcut: a small card in the title bar ---------- */
 .qpomo {
   /* the tomato card's own accents — red for focus, green for a break */
   --pomo-accent: #e5484d;
-  margin: 2px 12px 4px;
-  padding: 8px 10px 7px;
-  border-radius: var(--r-md);
-  background: var(--bg-card);
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;              /* the same height as the header row */
+  padding: 0 4px 0 3px;
+  border-radius: var(--r-full);
   border: 1px solid var(--border);
+  background: var(--bg-card);
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
   transition: border var(--t-fast), box-shadow var(--t-fast);
 }
 .qpomo.live {
-  border-color: color-mix(in srgb, var(--pomo-accent) 45%, var(--border));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--pomo-accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--pomo-accent) 55%, var(--border));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--pomo-accent) 14%, transparent);
 }
 .qpomo.brk { --pomo-accent: #3fae5a; }
 
-.qpomo-top { display: flex; align-items: center; gap: 9px; }
-
 .qpomo-tomato {
-  position: relative;
-  width: 38px; height: 38px;
+  width: 18px; height: 18px;
   flex-shrink: 0;
   padding: 0; border: none; background: transparent;
   cursor: pointer;
   display: block;
-  filter: drop-shadow(0 2px 5px rgba(229, 72, 77, 0.26));
   transition: transform var(--t-fast);
 }
-.qpomo.brk .qpomo-tomato { filter: drop-shadow(0 2px 5px rgba(63, 174, 90, 0.24)); }
-.qpomo-tomato:hover { transform: translateY(-1px) scale(1.04); }
+.qpomo-tomato:hover { transform: scale(1.08); }
 .qpomo-tomato img { width: 100%; height: 100%; object-fit: contain; display: block; }
-.qpomo-clock {
-  position: absolute;
-  left: 50%; top: 57%;
-  transform: translate(-50%, -50%);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.3px;
-  color: #fff;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
-  pointer-events: none;
+.qpomo-dot {
+  display: block;
+  width: 15px; height: 15px;
+  margin: 1.5px;
+  border-radius: var(--r-full);
+  background: var(--pomo-accent);
 }
 
-.qpomo-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.qpomo-chip {
-  align-self: flex-start;
-  font-size: var(--fs-xs);
+.qpomo-clock {
+  font-size: 11px;
   font-weight: 700;
-  color: var(--pomo-accent);
-  background: color-mix(in srgb, var(--pomo-accent) 13%, transparent);
-  border-radius: var(--r-full);
-  padding: 1px 8px;
+  color: var(--fg-text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.2px;
   white-space: nowrap;
-}
-.qpomo-sess {
-  font-size: var(--fs-xs);
-  color: var(--fg-tertiary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 30px;
+  text-align: center;
 }
 
 .qpomo-btn {
-  width: 24px; height: 24px;
+  width: 17px; height: 17px;
   flex-shrink: 0;
   padding: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--r-full);
-  background: var(--bg-card);
-  color: var(--fg-tertiary);
-  cursor: pointer;
-  display: inline-flex; align-items: center; justify-content: center;
-  transition: all var(--t-fast);
-}
-.qpomo-btn:hover { color: var(--pomo-accent); border-color: var(--pomo-accent); transform: translateY(-1px); }
-.qpomo-btn.ghost { border-color: transparent; background: transparent; }
-.qpomo-btn.ghost:hover { background: var(--bg-hover); }
-
-.qpomo-bottom { display: flex; align-items: center; gap: 7px; margin-top: 7px; }
-.qpomo-bar {
-  flex: 1;
-  height: 4px;
-  border-radius: var(--r-full);
-  background: var(--bg-hover);
-  overflow: hidden;
-}
-.qpomo-fill {
-  display: block;
-  height: 100%;
+  border: none;
   border-radius: var(--r-full);
   background: var(--pomo-accent);
-  transition: width 0.9s linear;
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: filter var(--t-fast), transform var(--t-fast);
 }
-.qpomo-pct {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--fg-tertiary);
-  font-variant-numeric: tabular-nums;
-  width: 28px;
-  text-align: right;
-  flex-shrink: 0;
-}
+.qpomo-btn:hover { filter: brightness(1.08); transform: scale(1.07); }
+.qpomo-btn:active { transform: scale(0.94); }
 
 .qbody { flex: 1; overflow-y: auto; padding: 6px 8px 4px; min-height: 0; display: flex; flex-direction: column; align-items: stretch; }
 .qsec-block { display: flex; flex-direction: column; }

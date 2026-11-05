@@ -523,11 +523,16 @@ function createMainWindow() {
                 if (!strip) return JSON.stringify({ present: false })
                 const read = () => ({
                   clock: document.querySelector('.qpomo-clock')?.textContent?.trim(),
-                  chip: document.querySelector('.qpomo-chip')?.textContent?.trim(),
-                  sess: document.querySelector('.qpomo-sess')?.textContent?.trim(),
-                  pct: document.querySelector('.qpomo-pct')?.textContent?.trim(),
                   live: strip.classList.contains('live'),
-                  hasTomatoImg: !!document.querySelector('.qpomo-tomato img')
+                  hasTomatoImg: !!document.querySelector('.qpomo-tomato img'),
+                  inHeader: !!document.querySelector('.qhead .qpomo'),
+                  cardH: Math.round(strip.getBoundingClientRect().height),
+                  headH: Math.round(document.querySelector('.qhead')?.getBoundingClientRect().height || 0),
+                  leftOfCounts: (() => {
+                    const c = document.querySelector('.qpomo')?.getBoundingClientRect()
+                    const n = document.querySelector('.qcounts')?.getBoundingClientRect()
+                    return c && n ? n.left - c.right : null
+                  })()
                 })
                 const before = read()
                 document.querySelector('.qpomo-tomato')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -539,16 +544,15 @@ function createMainWindow() {
                 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
                 const read = () => ({
                   clock: document.querySelector('.qpomo-clock')?.textContent?.trim(),
-                  pct: document.querySelector('.qpomo-pct')?.textContent?.trim(),
-                  live: document.querySelector('.qpomo')?.classList.contains('live')
+                  live: document.querySelector('.qpomo')?.classList.contains('live'),
+                  inHeader: !!document.querySelector('.qhead .qpomo'),
+                  cardH: Math.round(document.querySelector('.qpomo')?.getBoundingClientRect().height || 0),
+                  headH: Math.round(document.querySelector('.qhead')?.getBoundingClientRect().height || 0)
                 })
                 document.querySelector('.qpomo-tomato')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
                 await sleep(500)
                 const paused = read()
-                document.querySelector('.qpomo-btn.ghost')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-                await sleep(500)
-                const reset = read()
-                return JSON.stringify({ paused, reset })
+                return JSON.stringify({ paused })
               })()`
               const first = JSON.parse(await qw.webContents.executeJavaScript(readJs, true))
               const cap = await qw.webContents.capturePage()
