@@ -37,11 +37,19 @@ struct WidgetNote: Codable, Identifiable {
 
 struct WidgetSnapshot: Codable {
     var generatedAt: Date?
+    var lang: String = "zh"
     var todayCount: Int = 0
     var plannedCount: Int = 0
     var noteCount: Int = 0
     var pomodoroSeconds: Int = 0
     var pomodoroRunning: Bool = false
+    /// the timer was started (running, paused, or part-way through)
+    var pomodoroActive: Bool = false
+    /// "work" | "break"
+    var pomodoroMode: String = "work"
+    var pomodoroTotalMs: Double = 0
+    var pomodoroElapsedPct: Int = 0
+    var pomodoroSessions: Int = 0
     var today: [WidgetTask] = []
     var planned: [WidgetTask] = []
     var notes: [WidgetNote] = []
@@ -173,8 +181,9 @@ enum WidgetStore {
 
 enum WidgetFormat {
     /// "今天" / "明天" / "逾期" / "11月5日"
-    static func dueLabel(_ iso: String?, today: Date = Date()) -> String {
-        guard let iso, !iso.isEmpty else { return "无日期" }
+    static func dueLabel(_ iso: String?, today: Date = Date(), lang: String = "zh") -> String {
+        let en = lang == "en"
+        guard let iso, !iso.isEmpty else { return en ? "No date" : "无日期" }
         let parts = iso.split(separator: "-").compactMap { Int($0) }
         guard parts.count == 3 else { return iso }
         var cal = Calendar(identifier: .gregorian)
@@ -182,12 +191,12 @@ enum WidgetFormat {
         guard let due = cal.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2])) else { return iso }
         let comps = cal.dateComponents([.day], from: cal.startOfDay(for: today), to: cal.startOfDay(for: due))
         let diff = comps.day ?? 0
-        if diff == 0 { return "今天" }
-        if diff == 1 { return "明天" }
-        if diff < 0 { return "逾期" }
+        if diff == 0 { return en ? "Today" : "今天" }
+        if diff == 1 { return en ? "Tomorrow" : "明天" }
+        if diff < 0 { return en ? "Overdue" : "逾期" }
         let fmt = DateFormatter()
-        fmt.locale = Locale(identifier: "zh_CN")
-        fmt.dateFormat = "M月d日"
+        fmt.locale = Locale(identifier: en ? "en_US" : "zh_CN")
+        fmt.dateFormat = en ? "MMM d" : "M月d日"
         return fmt.string(from: due)
     }
 
@@ -201,10 +210,13 @@ enum WidgetFormat {
         return due < cal.startOfDay(for: today)
     }
 
-    /// "25:00" style clock
+    /// "25:00" style clock — never wraps, never truncates
     static func clock(_ seconds: Int) -> String {
-        let m = seconds / 60
-        let s = seconds % 60
-        return String(format: "%02d:%02d", m, s)
+        let s = max(0, seconds)
+        let h = s / 3600
+        let m = (s % 3600) / 60
+        let sec = s % 60
+        if h > 0 { return String(format: "%d:%02d:%02d", h, m, sec) }
+        return String(format: "%02d:%02d", m, sec)
     }
 }

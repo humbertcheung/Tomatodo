@@ -514,6 +514,48 @@ function createMainWindow() {
                 return found ? JSON.stringify(found) : 'null'
               })()`, true)
             }
+            // 1b) quick panel: the pomodoro shortcut
+            let pomo = null
+            if (qw) {
+              const readJs = `(async () => {
+                const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+                const strip = document.querySelector('.qpomo')
+                if (!strip) return JSON.stringify({ present: false })
+                const read = () => ({
+                  clock: document.querySelector('.qpomo-clock')?.textContent?.trim(),
+                  chip: document.querySelector('.qpomo-chip')?.textContent?.trim(),
+                  sess: document.querySelector('.qpomo-sess')?.textContent?.trim(),
+                  pct: document.querySelector('.qpomo-pct')?.textContent?.trim(),
+                  live: strip.classList.contains('live'),
+                  hasTomatoImg: !!document.querySelector('.qpomo-tomato img')
+                })
+                const before = read()
+                document.querySelector('.qpomo-tomato')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+                await sleep(1500)
+                const running = read()
+                return JSON.stringify({ before, running })
+              })()`
+              const step2Js = `(async () => {
+                const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+                const read = () => ({
+                  clock: document.querySelector('.qpomo-clock')?.textContent?.trim(),
+                  pct: document.querySelector('.qpomo-pct')?.textContent?.trim(),
+                  live: document.querySelector('.qpomo')?.classList.contains('live')
+                })
+                document.querySelector('.qpomo-tomato')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+                await sleep(500)
+                const paused = read()
+                document.querySelector('.qpomo-btn.ghost')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+                await sleep(500)
+                const reset = read()
+                return JSON.stringify({ paused, reset })
+              })()`
+              const first = JSON.parse(await qw.webContents.executeJavaScript(readJs, true))
+              const cap = await qw.webContents.capturePage()
+              fs.writeFileSync(path.join(shotDir, 'quick-pomo.png'), cap.toPNG())
+              const second = JSON.parse(await qw.webContents.executeJavaScript(step2Js, true))
+              pomo = JSON.stringify({ ...first, ...second })
+            }
             hideQuick()
             await new Promise((r) => setTimeout(r, 400))
             const rev = await mainWindow.webContents.executeJavaScript(`(async () => {
@@ -551,7 +593,11 @@ function createMainWindow() {
               })()
               return JSON.stringify(o)
             })()`, true)
-            fs.writeFileSync(path.join(shotDir, 'review.json'), JSON.stringify({ rich: rich ? JSON.parse(rich) : null, main: JSON.parse(rev) }))
+            fs.writeFileSync(path.join(shotDir, 'review.json'), JSON.stringify({
+              rich: rich ? JSON.parse(rich) : null,
+              pomo: pomo ? JSON.parse(pomo) : null,
+              main: JSON.parse(rev)
+            }))
           } catch (e) { fs.writeFileSync(path.join(shotDir, 'review.json'), 'FAIL:' + (e?.message || e)) }
         }
       } catch (e) { console.error('shot failed', e) }
