@@ -8,7 +8,7 @@
 //
 //  Interactivity:
 //   • the check button on each task toggles completion (AppIntent → the app
-//     applies it from the pending-actions file in the group container)
+//     applies it over the localhost data channel)
 //   • each row is a Link that deep-links into the app (tomatodo://…)
 //
 
@@ -16,12 +16,11 @@ import WidgetKit
 import SwiftUI
 import AppIntents
 
-// MARK: - Pending-action intent
+// MARK: - Action intent
 
 /// Toggling a task from the widget cannot touch the app's SQLite database
-/// directly (the extension is sandboxed), so the intent writes a pending
-/// action into the group container; the running app polls that file, applies
-/// it and republishes the snapshot.
+/// directly (the extension is sandboxed), so the intent asks the running app
+/// over localhost; the app applies the toggle and the widget re-renders live.
 struct ToggleTaskIntent: AppIntent {
     static let title: LocalizedStringResource = "切换待办完成状态"
     static let description = IntentDescription("在 Tomatodo 中切换该待办的完成状态")
@@ -35,25 +34,10 @@ struct ToggleTaskIntent: AppIntent {
     }
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        guard let target = WidgetStore.actionsURL else {
-            return .result(dialog: IntentDialog("数据通道不可用"))
-        }
-        var actions: [[String: String]] = []
-        if let data = try? Data(contentsOf: target),
-           let list = try? JSONSerialization.jsonObject(with: data) as? [[String: String]] {
-            actions = list
-        }
-        actions.append([
-            "type": "toggleTask",
-            "id": taskID,
-            "at": ISO8601DateFormatter().string(from: Date())
-        ])
-        if let data = try? JSONSerialization.data(withJSONObject: actions) {
-            try? data.write(to: target)
-        }
-        // re-render once the app has (usually) applied the action
+        // the app applies the toggle over localhost and we re-render live
+        let ok = await WidgetStore.sendActionAsync(["type": "toggleTask", "id": taskID])
         WidgetCenter.shared.reloadAllTimelines()
-        return .result(dialog: IntentDialog("已更新 ✓"))
+        return .result(dialog: IntentDialog(ok ? "已更新 ✓" : "Tomatodo 未运行"))
     }
 }
 

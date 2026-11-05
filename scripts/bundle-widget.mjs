@@ -23,8 +23,12 @@ fs.rmSync(target, { recursive: true, force: true })
 fs.mkdirSync(path.dirname(target), { recursive: true })
 fs.cpSync(built, target, { recursive: true })
 
-const size = fs.readdirSync(target).reduce((sum, f) => {
-  const p = path.join(target, f)
-  return sum + (fs.statSync(p).isDirectory() ? 0 : fs.statSync(p).size)
-}, 0)
-console.log(`widget bundled → resources/widget (${Math.round(size / 1024)} KB of files)`)
+function dirSize(dir) {
+  let total = 0
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, entry.name)
+    total += entry.isDirectory() ? dirSize(p) : fs.statSync(p).size
+  }
+  return total
+}
+console.log(`widget bundled → resources/widget (${Math.round(dirSize(target) / 1024)} KB of files)`)

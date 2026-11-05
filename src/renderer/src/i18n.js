@@ -85,6 +85,7 @@ const messages = {
       delete: '删除便签',
       copy: '复制便签',
       deleted: '便签已删除',
+      saveFailed: '便签文档保存失败',
       updated: '修改于',
       colors: '颜色',
       count: '{n} 条便签'
@@ -297,7 +298,7 @@ const messages = {
       search: 'Search notes (title & content)', empty: 'No notes yet — capture one from the menu bar',
       noResults: 'No matching notes', pinned: 'Pinned', pin: 'Pin', unpin: 'Unpin',
       delete: 'Delete note',
-      copy: 'Copy note', deleted: 'Note deleted', updated: 'Updated', colors: 'Color', count: '{n} notes'
+      copy: 'Copy note', deleted: 'Note deleted', saveFailed: 'Could not save the note document', updated: 'Updated', colors: 'Color', count: '{n} notes'
     },
     pomo: {
       title: 'Pomodoro', work: 'Focus', break: 'Break', start: 'Start', pause: 'Pause', reset: 'Reset', resume: 'Resume',

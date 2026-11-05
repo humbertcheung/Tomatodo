@@ -1,7 +1,7 @@
 {
   "name": "todo-menubar",
   "productName": "Tomatodo",
-  "version": "2.4.6",
+  "version": "2.4.7",
   "description": "A local to-do app inspired by Microsoft To Do's feature set, with a first-class macOS menu bar (tray) experience",
   "main": "out/main/index.js",
   "author": "humbertcheung",
@@ -16,6 +16,8 @@
     "postinstall": "electron-builder install-app-deps",
     "test": "node scripts/test-rtf.mjs && node scripts/test-counts.mjs",
     "test:backup": "electron scripts/test-backup.mjs",
+    "test:weather": "electron scripts/test-weather.mjs",
+    "test:restore": "electron scripts/test-restore.mjs",
     "migrate:curiota": "node scripts/migrate-curiota.mjs --wipe",
     "widget:build": "node widget/generate-project.mjs && cd widget && xcodebuild -project TomatodoWidget.xcodeproj -scheme TomatodoWidget -configuration Release -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY=\"\" build",
     "widget:bundle": "node scripts/bundle-widget.mjs"

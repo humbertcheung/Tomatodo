@@ -14,7 +14,7 @@ import { setMiniLang } from '@shared/i18n-mini'
 import { deriveNextOccurrence } from '@shared/recurrence'
 import { getPomodoro, startPomodoro, pausePomodoro, resetPomodoro, restorePomodoro, setPomodoroTickHook } from './pomodoro'
 import { getWeather, invalidateWeatherCache } from './weather'
-import { publishWidgetSnapshot, startWidgetActionBridge } from './widget.js'
+import { startWidgetServer } from './widget-server.js'
 import { htmlToRtf, htmlToText, rtfToHtml } from '@shared/rtf'
 import { backupStatus, backupStatusAfter, runBackup, restoreFromBackup, openBackupDir, openNotesDir, startBackupScheduler } from './backup'
 
@@ -484,6 +484,76 @@ function createMainWindow() {
           }
           hideQuick()
         }
+        // focused review probe (round-D items)
+        if (process.env.TODOMENU_REVIEW) {
+          try {
+            // 1) quick panel: expanded note keeps its line breaks
+            showQuickPanel(true)
+            await new Promise((r) => setTimeout(r, 1600))
+            const qw = BrowserWindow.getAllWindows().find((w) => w !== mainWindow)
+            let rich = null
+            if (qw) {
+              rich = await qw.webContents.executeJavaScript(`(async () => {
+                const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+                const titles = [...document.querySelectorAll('.qn-title')]
+                let found = null
+                for (const ti of titles) {
+                  ti.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+                  await sleep(300)
+                  const rich = document.querySelector('.qrich')
+                  if (rich) {
+                    const rec = {
+                      hasBr: rich.innerHTML.includes('<br>'),
+                      openBtn: !!document.querySelector('.qopen-btn'),
+                      html: rich.innerHTML.slice(0, 120)
+                    }
+                    if (!found) found = rec
+                    if (rec.hasBr) return JSON.stringify(rec)
+                  }
+                }
+                return found ? JSON.stringify(found) : 'null'
+              })()`, true)
+            }
+            hideQuick()
+            await new Promise((r) => setTimeout(r, 400))
+            const rev = await mainWindow.webContents.executeJavaScript(`(async () => {
+              const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+              const o = {}
+              window.__todoDebug.switchMode('note')
+              await sleep(700)
+              // 2) note card hover: the action buttons must not move the content
+              const card = document.querySelector('.note-card')
+              if (card) {
+                const acts = card.querySelector('.nc-actions')
+                const h0 = card.getBoundingClientRect().height
+                const t0 = card.querySelector('.nc-title')?.getBoundingClientRect().top
+                card.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }))
+                await sleep(250)
+                const h1 = card.getBoundingClientRect().height
+                const t1 = card.querySelector('.nc-title')?.getBoundingClientRect().top
+                o.card = {
+                  pos: acts ? getComputedStyle(acts).position : null,
+                  h0: Math.round(h0), h1: Math.round(h1),
+                  dy: (t0 !== undefined && t1 !== undefined) ? Math.round(t1 - t0) : null
+                }
+              }
+              // 3) note editor toolbar: the ordered-list button is an icon
+              window.__todoDebug.state.selectedNoteId = window.__todoDebug.state.notes[0]?.id || null
+              await sleep(900)
+              o.toolbar = (() => {
+                const btns = [...document.querySelectorAll('.nd-fmt')]
+                return {
+                  count: btns.length,
+                  icons: btns.filter(b => b.querySelector('svg')).length,
+                  texts: btns.map(b => b.textContent.trim()).filter(Boolean),
+                  lastIsIcon: btns.length ? !!btns[btns.length - 1].querySelector('svg') : false
+                }
+              })()
+              return JSON.stringify(o)
+            })()`, true)
+            fs.writeFileSync(path.join(shotDir, 'review.json'), JSON.stringify({ rich: rich ? JSON.parse(rich) : null, main: JSON.parse(rev) }))
+          } catch (e) { fs.writeFileSync(path.join(shotDir, 'review.json'), 'FAIL:' + (e?.message || e)) }
+        }
       } catch (e) { console.error('shot failed', e) }
       if (process.env.TODOMENU_DARK) db.setSetting('theme', 'system')
       app.quit()
@@ -503,6 +573,49 @@ function seedNote({ title, content, color, pinned }) {
     db.updateNote(note.id, { file, preview: htmlToText(html).slice(0, 500) })
   } catch (e) { console.error('SEED NOTE FILE FAILED:', e && e.stack || e) }
   return note
+}
+
+/**
+ * Keep the "one note = one RTF document" invariant true.
+ *
+ * The RTF file is the source of truth for a note's rich content, but the
+ * database row carries a plain copy. If a write ever failed (or a file was
+ * removed behind our back) the note would silently lose its document — so on
+ * every start we rebuild the missing documents from the stored content and
+ * drop files that no longer belong to a note.
+ */
+function repairNoteFiles() {
+  const dir = path.join(app.getPath('userData'), 'notes')
+  try { fs.mkdirSync(dir, { recursive: true }) } catch { /* ignore */ }
+  let rebuilt = 0
+  let removed = 0
+  try {
+    const notes = db.listNotes({ limit: 100000 })
+    const known = new Set()
+    for (const n of notes) {
+      known.add(`${n.id}.rtf`)
+      const file = path.join(dir, `${n.id}.rtf`)
+      if (fs.existsSync(file)) continue
+      try {
+        fs.writeFileSync(file, htmlToRtf(n.content || ''), 'utf8')
+        db.setNoteFile(n.id, file)
+        rebuilt++
+      } catch (e) {
+        console.error('NOTE FILE REBUILD FAILED:', n.id, e && e.message || e)
+      }
+    }
+    for (const f of fs.readdirSync(dir)) {
+      if (!f.endsWith('.rtf')) continue
+      if (known.has(f)) continue
+      try { fs.unlinkSync(path.join(dir, f)); removed++ } catch { /* ignore */ }
+    }
+  } catch (e) {
+    console.error('NOTE FILE REPAIR FAILED:', e && e.message || e)
+  }
+  if (rebuilt || removed) {
+    console.log(`[notes] repaired ${rebuilt} missing document(s), removed ${removed} orphan(s)`)
+  }
+  return { rebuilt, removed }
 }
 
 /** demo content for UI review (only with TODOMENU_DEMO=1, dev-local DB) */
@@ -566,8 +679,6 @@ function broadcast(channel, payload) {
 function broadcastChanged() {
   refreshTrayMenu()
   updateTrayTitle()
-  // keep the desktop widgets in sync
-  publishWidgetSnapshot()
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('db:changed')
   if (BrowserWindow.getAllWindows().some((w) => w !== mainWindow)) {
     for (const w of BrowserWindow.getAllWindows()) {
@@ -970,16 +1081,17 @@ app.whenReady().then(() => {
   const info = db.openDatabase(app.getPath('userData'))
   console.log('[Tomatodo] sqlite driver:', info.driver, '→', info.file)
 
+  // every note must have its RTF document on disk
+  repairNoteFiles()
+
   // scheduled backups (also catches a slot missed while the app was closed)
   startBackupScheduler()
   // make the widget extension discoverable (the widget gallery reads the
   // LaunchServices / ExtensionKit database — after an in-place upgrade the
   // bundle changed and the old registration no longer applies)
   registerWidgetExtension()
-  // first widget snapshot
-  setTimeout(() => publishWidgetSnapshot(), 1500)
-  // apply the actions the widget intents queued
-  startWidgetActionBridge()
+  // the widget extension fetches live data + sends actions over localhost
+  startWidgetServer()
 
   // dock/window icon (dev shows the default Electron icon otherwise)
   try {

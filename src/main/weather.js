@@ -168,7 +168,7 @@ export function iconOf(code) {
 }
 
 /** derive severe-weather alerts from the forecast payload */
-function deriveAlerts(current, daily) {
+export function deriveAlerts(current, daily) {
   const alerts = []
   const lang = 'zh'
   if (current) {
@@ -205,18 +205,26 @@ export function invalidateWeatherCache() {
 }
 
 /**
+ * The alerts that still have to be announced: everything in the payload that
+ * has not been shown yet today (the dedupe list resets at midnight).
+ */
+export function freshAlerts(alerts, fired, today) {
+  const already = fired && fired.date === today && Array.isArray(fired.items) ? fired.items : []
+  return (Array.isArray(alerts) ? alerts : []).filter((a) => !already.includes(a))
+}
+
+/**
  * Fire a system notification for every severe-weather alert that has not
  * been shown today (the dedupe list resets at midnight).
  */
-function notifySevereWeather(data) {
+export function notifySevereWeather(data) {
   try {
     if (!getSetting('weatherAlertNotify', true)) return
     if (!data?.ok || !Array.isArray(data.alerts) || !data.alerts.length) return
     if (!Notification.isSupported()) return
     const today = new Date().toISOString().slice(0, 10)
     const fired = getSetting('weatherAlertsFired', {}) || {}
-    const already = fired.date === today ? fired.items : []
-    const fresh = data.alerts.filter((a) => !already.includes(a))
+    const fresh = freshAlerts(data.alerts, fired, today)
     if (!fresh.length) return
     for (const a of fresh.slice(0, 3)) {
       const n = new Notification({
@@ -226,7 +234,7 @@ function notifySevereWeather(data) {
       n.on('click', () => { /* the main window is already the surface for this */ })
       n.show()
     }
-    setSetting('weatherAlertsFired', { date: today, items: [...already, ...fresh] })
+    setSetting('weatherAlertsFired', { date: today, items: [...(fired.date === today ? (fired.items || []) : []), ...fresh] })
   } catch { /* best effort */ }
 }
 

@@ -231,7 +231,10 @@ export function switchMode(mode) {
 
 export async function createNote(payload = {}) {
   const note = await window.api.notes.create({ title: '', content: '', color: pickNoteColor(), ...payload })
-  if (note.content) window.api.notes.writeFile(note.id, note.content).catch(() => {})
+  if (note.content) {
+    const file = await window.api.notes.writeFile(note.id, note.content).catch(() => null)
+    if (!file) toast(t('note.saveFailed'))
+  }
   await refreshNotes()
   state.selectedNoteId = note.id
   return note
@@ -245,10 +248,14 @@ export async function updateNote(id, fields) {
     const { htmlToText } = await import('./lib/richtext')
     payload.preview = htmlToText(payload.content).slice(0, 500)
   }
-  const r = await window.api.notes.update(id, payload)
+  // the document is written BEFORE the row: a crash in between then leaves a
+  // stale file (harmless, repaired on start) instead of a note that lost its
+  // RTF document
   if (payload.content !== undefined) {
-    window.api.notes.writeFile(id, payload.content).catch(() => {})
+    const file = await window.api.notes.writeFile(id, payload.content).catch(() => null)
+    if (!file) toast(t('note.saveFailed'))
   }
+  const r = await window.api.notes.update(id, payload)
   const i = state.notes.findIndex((n) => n.id === id)
   if (i >= 0) Object.assign(state.notes[i], r)
   return r

@@ -610,6 +610,15 @@ export function setNoteTimestamps(id, created_at, updated_at) {
 }
 
 /**
+ * Point a note at its RTF document — WITHOUT touching updated_at, so repairing
+ * a document never reorders the note list.
+ */
+export function setNoteFile(id, file) {
+  run('UPDATE notes SET file = ? WHERE id = ?', file || null, id)
+  return getNote(id)
+}
+
+/**
  * Replace the current data with a backup snapshot.
  * The snapshot holds the tasks (plus lists / steps / attachments) and the
  * notes' metadata; the notes' RTF documents are handed in separately.

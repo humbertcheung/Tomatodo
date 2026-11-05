@@ -2,9 +2,15 @@
 //  WidgetShared.swift
 //  The data contract between the Tomatodo app and its WidgetKit extension.
 //
-//  The app writes a small JSON snapshot into the App Group container; the
-//  widget reads it and renders it. A JSON snapshot keeps the extension free
-//  of a SQLite dependency (and of any file locking issues with the app).
+//  The extension is SANDBOXED (the widget gallery requires it), so the data
+//  flows over a localhost HTTP server the app runs:
+//
+//    GET http://127.0.0.1:<port>/snapshot                    → live snapshot JSON
+//    GET http://127.0.0.1:<port>/action?type=…&id=…          → applies an action
+//
+//  The extension is entitled with com.apple.security.network.client, which
+//  covers loopback connections. The app binds the first free port of a small
+//  candidate range; the extension tries them all and remembers the winner.
 //
 
 import Foundation
@@ -30,7 +36,7 @@ struct WidgetNote: Codable, Identifiable {
 }
 
 struct WidgetSnapshot: Codable {
-    var generatedAt: Date = Date()
+    var generatedAt: Date?
     var todayCount: Int = 0
     var plannedCount: Int = 0
     var noteCount: Int = 0
@@ -43,64 +49,123 @@ struct WidgetSnapshot: Codable {
     static let empty = WidgetSnapshot()
 }
 
+// MARK: - Server
+
+enum WidgetServer {
+    static let ports: [Int] = [47610, 47611, 47612, 47613, 47614, 47615]
+    /// the port that answered last — tried first on subsequent calls
+    static var knownPort: Int?
+
+    /// the known-good port goes first, then the full list
+    static func orderedPorts() -> [Int] {
+        var order = ports
+        if let knownPort, let i = ports.firstIndex(of: knownPort) {
+            order.remove(at: i)
+            order.insert(knownPort, at: 0)
+        }
+        return order
+    }
+
+    /// fetch a path from the app's localhost server (short timeout per port)
+    static func fetch(path: String, timeout: TimeInterval = 2) -> Data? {
+        for port in orderedPorts() {
+            guard let url = URL(string: "http://127.0.0.1:\(port)\(path)") else { continue }
+            let sem = DispatchSemaphore(value: 0)
+            var payload: Data?
+            var done = false
+            var req = URLRequest(url: url)
+            req.timeoutInterval = timeout
+            let task = URLSession.shared.dataTask(with: req) { data, response, _ in
+                if let http = response as? HTTPURLResponse, http.statusCode == 200 {
+                    payload = data
+                }
+                done = true
+                sem.signal()
+            }
+            task.resume()
+            // hard cap so a hung connection can never stall a timeline refresh
+            _ = sem.wait(timeout: .now() + timeout + 1)
+            if !done { task.cancel() }
+            if let payload {
+                knownPort = port
+                return payload
+            }
+        }
+        return nil
+    }
+
+    /// async variant — used by the AppIntent, so the cooperative thread is
+    /// never blocked while the app answers.
+    static func fetchAsync(path: String, timeout: TimeInterval = 3) async -> Data? {
+        for port in orderedPorts() {
+            guard let url = URL(string: "http://127.0.0.1:\(port)\(path)") else { continue }
+            var req = URLRequest(url: url)
+            req.timeoutInterval = timeout
+            do {
+                let (data, response) = try await URLSession.shared.data(for: req)
+                if let http = response as? HTTPURLResponse, http.statusCode == 200 {
+                    knownPort = port
+                    return data
+                }
+            } catch {
+                continue
+            }
+        }
+        return nil
+    }
+}
+
 // MARK: - Store
 
 enum WidgetStore {
-    /// App Group used by both the app and the widget.
-    /// TEAM-ID-prefixed groups work with Developer ID signing (no profile).
-    static let appGroup = "HDEN58Z6QL.group.cc.humbert.tomatodo"
-    static let widgetBundleID = "cc.humbert.todo-menubar.widget"
-    static let fileName = "widget-snapshot.json"
-    static let actionsName = "widget-actions.json"
-
-    static var groupContainerURL: URL? {
-        FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: appGroup
-        )
-    }
-
-    /// Every place the snapshot may live, in preference order.
-    /// NB: inside the sandbox, NSHomeDirectory() IS this container's Data
-    /// folder — the naive absolute path would nest the container inside
-    /// itself, which is why the naive lookup found nothing.
-    static var snapshotCandidates: [URL] {
-        var list: [URL] = []
-        if let group = groupContainerURL {
-            list.append(group.appendingPathComponent(fileName))
-        }
-        // the app's data folder — the primary channel for a NON-sandboxed
-        // extension (the app keeps writing there)
-        list.append(URL(fileURLWithPath: NSHomeDirectory())
-            .appendingPathComponent("Library/Application Support/Tomatodo")
-            .appendingPathComponent(fileName))
-        list.append(URL(fileURLWithPath: NSHomeDirectory())
-            .appendingPathComponent("Documents")
-            .appendingPathComponent(fileName))
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        list.append(home
-            .appendingPathComponent("Library/Containers/\(widgetBundleID)/Data/Documents")
-            .appendingPathComponent(fileName))
-        return list
-    }
-
+    /// Read the live snapshot from the app.
     static func load() -> (snapshot: WidgetSnapshot, found: Bool) {
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        for url in snapshotCandidates {
-            if let data = try? Data(contentsOf: url),
-               let snap = try? decoder.decode(WidgetSnapshot.self, from: data) {
-                return (snap, true)
-            }
+        decoder.dateDecodingStrategy = .custom { decoder in
+            // tolerate both plain ISO8601 and ISO8601 with fractional seconds
+            let container = try decoder.singleValueContainer()
+            let raw = try container.decode(String.self)
+            let plain = ISO8601DateFormatter()
+            if let date = plain.date(from: raw) { return date }
+            let frac = ISO8601DateFormatter()
+            frac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = frac.date(from: raw) { return date }
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "bad date")
         }
-        return (.empty, false)
+        guard let data = WidgetServer.fetch(path: "/snapshot"),
+              let snap = try? decoder.decode(WidgetSnapshot.self, from: data) else {
+            return (.empty, false)
+        }
+        return (snap, true)
     }
 
-    /// Where the widget writes its pending actions (the app polls this file).
-    /// the pending-actions file in the app's data folder (non-sandboxed read/write)
-    static var actionsURL: URL? {
-        URL(fileURLWithPath: NSHomeDirectory())
-            .appendingPathComponent("Library/Application Support/Tomatodo")
-            .appendingPathComponent(actionsName)
+    /// Queue an action with the app (returns true when the app accepted it).
+    @discardableResult
+    static func sendAction(_ action: [String: String]) -> Bool {
+        guard let data = WidgetServer.fetch(path: "/action?\(query(action))", timeout: 3) else {
+            return false
+        }
+        return String(data: data, encoding: .utf8)?.contains("\"ok\":true") == true
+    }
+
+    /// async variant of `sendAction`
+    @discardableResult
+    static func sendActionAsync(_ action: [String: String]) async -> Bool {
+        guard let data = await WidgetServer.fetchAsync(path: "/action?\(query(action))", timeout: 3) else {
+            return false
+        }
+        return String(data: data, encoding: .utf8)?.contains("\"ok\":true") == true
+    }
+
+    /// build a percent-encoded query string (stable order)
+    private static func query(_ action: [String: String]) -> String {
+        var parts: [String] = []
+        for (k, v) in action.sorted(by: { $0.key < $1.key }) {
+            let allowed = CharacterSet.alphanumerics
+            let encoded = v.addingPercentEncoding(withAllowedCharacters: allowed) ?? v
+            parts.append("\(k)=\(encoded)")
+        }
+        return parts.joined(separator: "&")
     }
 }
 
