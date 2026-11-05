@@ -44,6 +44,8 @@ export async function initStore() {
   window.api.onPomodoroTick((p) => { Object.assign(state.pomodoro, p) })
   state.pomodoro = await window.api.pomodoro.get()
   window.api.onOpenNote((id) => { openNoteById(id) })
+  // the quick panel started the timer → show the minimal tomato card here
+  window.api.onFocusMode?.((on) => { if (on) openFocus(); else exitFocus() })
 }
 
 function applyLanguage() {

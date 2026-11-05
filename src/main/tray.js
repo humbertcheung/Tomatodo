@@ -88,6 +88,22 @@ export function setupTray({ getMainWindow }) {
   ipcMain.handle('tray:quickAdd', async (_e, payload) => quickAddFromPanel(payload))
   ipcMain.handle('quick:close', () => hideQuick())
   ipcMain.handle('quick:openMain', () => { openMainWindow(); hideQuick() })
+  // starting the timer from the panel → show the app's minimal tomato card
+  ipcMain.handle('quick:openFocus', () => {
+    const w = mainWindowRef()
+    if (!w) return false
+    openMainWindow()
+    // a renderer that is still loading would drop the message
+    if (w.webContents.isLoading()) {
+      w.webContents.once('did-finish-load', () => {
+        if (!w.isDestroyed()) w.webContents.send('app:focusMode', true)
+      })
+    } else {
+      w.webContents.send('app:focusMode', true)
+    }
+    hideQuick()
+    return true
+  })
   ipcMain.handle('quick:data', () => buildQuickData())
   // the panel can be pinned above other windows (置顶)
   ipcMain.handle('quick:alwaysOnTop', (_e, on) => {

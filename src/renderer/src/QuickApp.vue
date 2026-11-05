@@ -199,9 +199,11 @@ async function loadPomo() {
 async function togglePomo() {
   if (pomo.value.running) {
     pomo.value = await window.api.pomodoro.pause()
-  } else {
-    pomo.value = await window.api.pomodoro.start()
+    return
   }
+  pomo.value = await window.api.pomodoro.start()
+  // starting from the panel hands over to the app's minimal tomato card
+  try { await window.api.quickOpenFocus?.() } catch { /* the card is optional */ }
 }
 
 // 置顶: keep the panel above other windows

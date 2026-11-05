@@ -111,6 +111,7 @@ contextBridge.exposeInMainWorld('api', {
   onQuickShow: on('quick:show'),
   onWeatherChanged: on('weather:changed'),
   onQuickSectionOrder: on('quick:sectionOrder'),
+  onFocusMode: on('app:focusMode'),
   // quick panel surface
   quickData: () => ipcRenderer.invoke('quick:data'),
   quickAdd: (p) => ipcRenderer.invoke('tray:quickAdd', p),
@@ -119,6 +120,7 @@ contextBridge.exposeInMainWorld('api', {
   quickIsAlwaysOnTop: () => ipcRenderer.invoke('quick:isAlwaysOnTop'),
   quickOpenNote: (id) => ipcRenderer.invoke('quick:openNote', id),
   quickOpenMain: () => ipcRenderer.invoke('quick:openMain'),
+  quickOpenFocus: () => ipcRenderer.invoke('quick:openFocus'),
   quickClose: () => ipcRenderer.invoke('quick:close'),
   // backup
   backupStatus: () => ipcRenderer.invoke('backup:status'),

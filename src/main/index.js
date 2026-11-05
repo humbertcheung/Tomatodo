@@ -583,6 +583,13 @@ function createMainWindow() {
                   dy: (t0 !== undefined && t1 !== undefined) ? Math.round(t1 - t0) : null
                 }
               }
+              // 2b) the minimal tomato card took over after the panel started it
+              o.focus = {
+                compact: !!document.querySelector('.compact'),
+                clock: document.querySelector('.tomato-clock')?.textContent?.trim(),
+                contentW: document.documentElement.clientWidth,
+                contentH: document.documentElement.clientHeight
+              }
               // 3) note editor toolbar: the ordered-list button is an icon
               window.__todoDebug.state.selectedNoteId = window.__todoDebug.state.notes[0]?.id || null
               await sleep(900)
@@ -597,6 +604,11 @@ function createMainWindow() {
               })()
               return JSON.stringify(o)
             })()`, true)
+            // proof shot of the minimal tomato card
+            try {
+              const fimg = await mainWindow.webContents.capturePage()
+              fs.writeFileSync(path.join(shotDir, 'focus-card.png'), fimg.toPNG())
+            } catch (e) { fs.writeFileSync(path.join(shotDir, 'focus-card.png'), 'FAIL:' + (e?.message || e)) }
             fs.writeFileSync(path.join(shotDir, 'review.json'), JSON.stringify({
               rich: rich ? JSON.parse(rich) : null,
               pomo: pomo ? JSON.parse(pomo) : null,
