@@ -2,6 +2,7 @@
 import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { state, updateTask, deleteTask, toggleTaskComplete, toast, listSteps, addStep, toggleStep, deleteStep, listAttachments, attachFile, attachLink, removeAttachment, askConfirm, askText } from '../store'
 import { t } from '../i18n'
+import { copyStyle, pasteStyle } from '../lib/formatpainter'
 import { describeRecurrence } from '@shared/recurrence'
 import {
   X, Sun, Star, CalendarDays, Bell, Repeat, StickyNote, ListTodo,
@@ -100,6 +101,21 @@ function fmt(cmd) {
   noteRef.value?.focus()
   document.execCommand(cmd, false, null)
   saveNote()
+}
+
+/** ⌥⌘C / ⌥⌘V format painter (shared with the two note editors) */
+function onNoteKeydown(e) {
+  if (!(e.metaKey && e.altKey)) return
+  // e.code, not e.key — Option is a dead key on macOS (⌥⌘C arrives as "ç")
+  if (e.code === 'KeyC') {
+    e.preventDefault()
+    if (copyStyle(noteRef.value)) toast(t('edit.styleCopied'))
+  } else if (e.code === 'KeyV') {
+    e.preventDefault()
+    const r = pasteStyle(noteRef.value)
+    if (r === 'ok') toast(t('edit.stylePasted'))
+    else toast(t('edit.styleEmpty'))
+  }
 }
 let noteTimer = null
 function onNoteInput() {
@@ -344,6 +360,7 @@ const completedLabel = computed(() => {
           contenteditable="true"
           data-placeholder="添加备注… / Add a note…"
           @input="onNoteInput"
+          @keydown="onNoteKeydown"
         ></div>
       </div>
 

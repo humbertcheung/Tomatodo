@@ -5,8 +5,9 @@
  * with image paste; delete included. Original implementation.
  */
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import { state, updateNote, deleteNote, askConfirm } from '../store'
+import { state, updateNote, deleteNote, askConfirm, toast } from '../store'
 import { t } from '../i18n'
+import { copyStyle, pasteStyle } from '../lib/formatpainter'
 import { X, Trash2 } from 'lucide-vue-next'
 
 const note = computed(() => state.notes.find((n) => n.id === state.notePopupId))
@@ -137,6 +138,21 @@ function fmtCmd(cmd) {
   scheduleSave()
 }
 
+/** ⌥⌘C / ⌥⌘V format painter (shared with the other two editors) */
+function onEditorKeydown(e) {
+  if (!(e.metaKey && e.altKey)) return
+  // e.code, not e.key — Option is a dead key on macOS (⌥⌘C arrives as "ç")
+  if (e.code === 'KeyC') {
+    e.preventDefault()
+    if (copyStyle(editor.value)) toast(t('edit.styleCopied'))
+  } else if (e.code === 'KeyV') {
+    e.preventDefault()
+    const r = pasteStyle(editor.value)
+    if (r === 'ok') toast(t('edit.stylePasted'))
+    else toast(t('edit.styleEmpty'))
+  }
+}
+
 async function onCopy() {
   if (!note.value) return
   await window.api.notes.copy(note.value.id)
@@ -210,6 +226,7 @@ onBeforeUnmount(() => clearTimeout(saveTimer))
           data-placeholder="记录内容…"
           @input="scheduleSave"
           @paste="onPaste"
+          @keydown="onEditorKeydown"
         ></div>
         <div class="sp-foot">
           <span class="sp-meta">{{ t('note.updated') }} · {{ fmtDate(note.updated_at) }}</span>

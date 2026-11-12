@@ -379,6 +379,9 @@ onMounted(async () => {
   /* the header is the drag handle for the frameless panel */
   -webkit-app-region: drag;
   cursor: default;
+  /* the panel is user-resizable — nothing in the bar may force it wider */
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 .qlogo-img {
   width: 24px; height: 24px;
@@ -394,8 +397,17 @@ onMounted(async () => {
   color: #fff;
   display: flex; align-items: center; justify-content: center;
 }
-.qtitle { font-weight: 600; font-size: var(--fs-base); }
-.qcounts { display: flex; gap: 8px; }
+.qtitle {
+  font-weight: 600;
+  font-size: var(--fs-base);
+  /* shrinkable at narrow panel widths — truncate instead of overflowing */
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.qcounts { display: flex; gap: 8px; flex-shrink: 0; }
 .qcount {
   display: inline-flex; align-items: center; gap: 4px;
   font-size: var(--fs-xs); color: var(--fg-tertiary);

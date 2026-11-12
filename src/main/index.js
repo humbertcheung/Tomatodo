@@ -482,6 +482,57 @@ function createMainWindow() {
               fs.writeFileSync(path.join(shotDir, 'note-opened.png'), cap.toPNG())
             } catch (e) { fs.writeFileSync(path.join(shotDir, 'note-open-probe.json'), 'FAIL:' + (e?.message || e)) }
           }
+          // quick-panel resize: persist → reopen at the saved size → narrow fit
+          if (process.env.TODOMENU_QRESIZE) {
+            try {
+              const qw2 = BrowserWindow.getAllWindows().find((w) => w !== mainWindow)
+              const res = { resizable: qw2.isResizable(), min: qw2.getMinimumSize() }
+              // 1) resize programmatically → the debounced persistence lands
+              qw2.setSize(560, 700, false)
+              await new Promise((r) => setTimeout(r, 700))
+              res.savedAfterResize = db.getSetting('quickPanelSize', null)
+              // 2) hide + reopen → the saved size must be re-applied
+              hideQuick()
+              await new Promise((r) => setTimeout(r, 400))
+              showQuickPanel(true)
+              await new Promise((r) => setTimeout(r, 600))
+              const qw3 = BrowserWindow.getAllWindows().find((w) => w !== mainWindow)
+              res.reopenedSize = qw3.getSize()
+              res.saved = db.getSetting('quickPanelSize', null)
+              // 3) narrow fit: no horizontal overflow, header intact
+              qw3.setSize(360, 420, false)
+              await new Promise((r) => setTimeout(r, 500))
+              res.narrow = await qw3.webContents.executeJavaScript(`(() => {
+                const de = document.documentElement
+                return JSON.stringify({
+                  overflowX: de.scrollWidth > de.clientWidth,
+                  scrollW: de.scrollWidth, clientW: de.clientWidth,
+                  titleTruncated: (() => {
+                    const el = document.querySelector('.qtitle')
+                    return el ? el.scrollWidth > el.clientWidth : null
+                  })(),
+                  pomoVisible: !!document.querySelector('.qpomo'),
+                  countsVisible: !!document.querySelector('.qcounts'),
+                  panelFills: Math.abs(document.querySelector('.qpanel').getBoundingClientRect().height - (innerHeight - 12)) < 2
+                })
+              })()`, true)
+              res.narrow = JSON.parse(res.narrow)
+              const capn = await qw3.webContents.capturePage()
+              fs.writeFileSync(path.join(shotDir, 'quick-narrow.png'), capn.toPNG())
+              // 4) wide fit
+              qw3.setSize(640, 800, false)
+              await new Promise((r) => setTimeout(r, 500))
+              res.wide = await qw3.webContents.executeJavaScript(`(() => {
+                const de = document.documentElement
+                return JSON.stringify({ overflowX: de.scrollWidth > de.clientWidth, w: de.clientWidth })
+              })()`, true)
+              res.wide = JSON.parse(res.wide)
+              const capw = await qw3.webContents.capturePage()
+              fs.writeFileSync(path.join(shotDir, 'quick-wide.png'), capw.toPNG())
+              fs.writeFileSync(path.join(shotDir, 'qresize.json'), JSON.stringify(res, null, 2))
+            } catch (e) { fs.writeFileSync(path.join(shotDir, 'qresize.json'), 'FAIL:' + (e?.message || e)) }
+            hideQuick()
+          }
           hideQuick()
         }
         // focused review probe (round-D items)
@@ -615,6 +666,129 @@ function createMainWindow() {
               main: JSON.parse(rev)
             }))
           } catch (e) { fs.writeFileSync(path.join(shotDir, 'review.json'), 'FAIL:' + (e?.message || e)) }
+        }
+        // format-painter probe: ⌥⌘C / ⌥⌘V in all three editors
+        if (process.env.TODOMENU_PAINT) {
+          try {
+            const out = await mainWindow.webContents.executeJavaScript(`(async () => {
+              const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+              const o = {}
+              // synthetic key press: key is "ç" (the macOS dead-key result) —
+              // the handler must match on e.code
+              const press = (el, code, key) => el.dispatchEvent(new KeyboardEvent('keydown', {
+                bubbles: true, cancelable: true, metaKey: true, altKey: true, code, key
+              }))
+              const select = (r) => { const s = getSelection(); s.removeAllRanges(); s.addRange(r) }
+
+              // ---- 1) the task note editor (TaskDetail) ----
+              // the review probe leaves the app in note mode — switch back
+              window.__todoDebug.switchMode('todo')
+              await sleep(600)
+              const task = window.__todoDebug.state.tasks.find(t => t.status !== 'completed')
+                || window.__todoDebug.state.tasks[0]
+              await window.api.tasks.update(task.id, { note_html: '<p><b>加粗文字</b>普通文字呀 更多内容</p>' })
+              window.__todoDebug.state.selectedTaskId = task.id
+              await sleep(700)
+              const ed = document.querySelector('.note-body')
+              o.taskEditorFound = !!ed
+              o.taskMode = window.__todoDebug.state.mode
+              if (ed) {
+                ed.innerHTML = '<p><b>加粗文字</b>普通文字呀 更多内容</p>'
+                // copy the bold style (⌥⌘C — key deliberately the dead-key "ç")
+                const b = ed.querySelector('b')
+                const r1 = document.createRange(); r1.selectNodeContents(b)
+                select(r1)
+                press(ed, 'KeyC', 'ç')
+                await sleep(150)
+                o.copyToast = document.body.innerText.includes('样式已复制')
+                // paint onto the plain run
+                const plain = [...ed.querySelector('p').childNodes].find(n => n.nodeType === 3 && n.textContent.includes('普通文字呀'))
+                const r2 = document.createRange()
+                r2.setStart(plain, plain.textContent.indexOf('普通文字呀'))
+                r2.setEnd(plain, plain.textContent.indexOf('普通文字呀') + 5)
+                select(r2)
+                press(ed, 'KeyV', 'v')
+                await sleep(200)
+                o.pastedHtml = ed.innerHTML.slice(0, 160)
+                o.pasteToast = document.body.innerText.includes('样式已粘贴')
+                // collapsed caret → expands to the word under it
+                const node = [...ed.querySelector('p').childNodes].find(n => n.nodeType === 3 && n.textContent.includes('更多内容'))
+                  || [...ed.querySelectorAll('b')].at(-1)
+                if (node && node.nodeType === 3) {
+                  const r3 = document.createRange()
+                  const off = node.textContent.indexOf('更多') + 1
+                  r3.setStart(node, off); r3.setEnd(node, off)
+                  select(r3)
+                  press(ed, 'KeyV', 'v')
+                  await sleep(200)
+                  o.collapsedHtml = ed.innerHTML.slice(0, 220)
+                }
+                await sleep(1000) // debounced save lands
+                const fresh = await window.api.tasks.get(task.id)
+                o.taskPersisted = (fresh.note_html || '').includes('普通文字呀') &&
+                  /<(b|strong)|font-weight:\s*(700|bold)|class="[^"]*bold/.test(fresh.note_html || '')
+                window.__todoDebug.state.selectedTaskId = null
+              }
+
+              // ---- 2) the note side panel (NoteDetail) ----
+              window.__todoDebug.switchMode('note')
+              await sleep(600)
+              const n1 = await window.api.notes.create({ title: '格式刷甲', content: '', color: 'blue' })
+              await window.api.notes.update(n1.id, { content: '<p><i>斜体源</i>普通文本啊 目标词</p>' })
+              window.__todoDebug.state.notes = await window.api.notes.list({})
+              window.__todoDebug.state.selectedNoteId = n1.id
+              await sleep(800)
+              const nd = document.querySelector('.nd-content')
+              o.noteDetailFound = !!nd
+              o.noteMode = window.__todoDebug.state.mode
+              if (nd) {
+                nd.innerHTML = '<p><i>斜体源</i>普通文本啊 目标词</p>'
+                const i = nd.querySelector('i')
+                const r4 = document.createRange(); r4.selectNodeContents(i)
+                select(r4)
+                press(nd, 'KeyC', 'ç')
+                await sleep(150)
+                const plain = [...nd.querySelector('p').childNodes].find(n => n.nodeType === 3 && n.textContent.includes('普通文本啊'))
+                const r5 = document.createRange()
+                r5.setStart(plain, 0); r5.setEnd(plain, 5)
+                select(r5)
+                press(nd, 'KeyV', 'v')
+                await sleep(1100)
+                const fresh = await window.api.notes.get(n1.id)
+                o.noteDetailPersisted = /<(i|em)|font-style:\s*italic/.test(fresh.content || '')
+                window.__todoDebug.state.selectedNoteId = null
+              }
+
+              // ---- 3) the sticky popup (NotePopup) ----
+              const n2 = await window.api.notes.create({ title: '格式刷乙', content: '', color: 'pink' })
+              await window.api.notes.update(n2.id, { content: '<p><b><i>粗斜体</i></b>普通内容呀 目标词</p>' })
+              window.__todoDebug.state.notes = await window.api.notes.list({})
+              window.__todoDebug.state.notePopupId = n2.id
+              await sleep(800)
+              const sp = document.querySelector('.sp-content')
+              o.popupFound = !!sp
+              if (sp) {
+                sp.innerHTML = '<p><b><i>粗斜体</i></b>普通内容呀 目标词</p>'
+                const src = sp.querySelector('b i') || sp.querySelector('b')
+                const r6 = document.createRange(); r6.selectNodeContents(src)
+                select(r6)
+                press(sp, 'KeyC', 'ç')
+                await sleep(150)
+                const plain = [...sp.querySelector('p').childNodes].find(n => n.nodeType === 3 && n.textContent.includes('普通内容呀'))
+                const r7 = document.createRange()
+                r7.setStart(plain, 0); r7.setEnd(plain, 5)
+                select(r7)
+                press(sp, 'KeyV', 'v')
+                await sleep(1100)
+                const fresh = await window.api.notes.get(n2.id)
+                o.popupPersisted = /<(b|strong)[^>]*>(?:<i|<em)|font-weight:\s*(700|bold)/.test(fresh.content || '')
+                o.popupHtml = (fresh.content || '').slice(0, 200)
+                window.__todoDebug.state.notePopupId = null
+              }
+              return JSON.stringify(o)
+            })()`, true)
+            fs.writeFileSync(path.join(shotDir, 'paint.json'), String(out))
+          } catch (e) { fs.writeFileSync(path.join(shotDir, 'paint.json'), 'FAIL:' + (e?.message || e)) }
         }
       } catch (e) { console.error('shot failed', e) }
       if (process.env.TODOMENU_DARK) db.setSetting('theme', 'system')

@@ -233,6 +233,22 @@ function rememberQuickPos() {
   }, 400)
 }
 
+/** the user-resized panel size is persisted the same way as its position */
+const QUICK_MIN = { w: 360, h: 400 }
+const QUICK_MAX = { w: 800, h: 1400 }
+let quickSizeSaveTimer = null
+
+function rememberQuickSize() {
+  clearTimeout(quickSizeSaveTimer)
+  quickSizeSaveTimer = setTimeout(() => {
+    if (!quickWin || quickWin.isDestroyed()) return
+    try {
+      const [w, h] = quickWin.getSize()
+      setSetting('quickPanelSize', { w, h })
+    } catch { /* ignore */ }
+  }, 400)
+}
+
 /** apply the pinned (always-on-top) state to the panel */
 function applyQuickPin() {
   if (!quickWin || quickWin.isDestroyed()) return
@@ -245,9 +261,13 @@ function ensureQuickWindow() {
   quickWin = new BrowserWindow({
     width: 400,
     height: 520,
+    minWidth: QUICK_MIN.w,
+    minHeight: QUICK_MIN.h,
     show: false,
     frame: false,
-    resizable: false,
+    // frameless but user-resizable: the OS draws invisible resize edges on
+    // the bottom / left / right borders (the top edge is the drag header)
+    resizable: true,
     fullscreenable: false,
     skipTaskbar: true,
     transparent: false,
@@ -267,6 +287,10 @@ function ensureQuickWindow() {
     const [x, y] = quickWin.getPosition()
     quickPos = { x, y }
     rememberQuickPos()
+  })
+  quickWin.on('resize', () => {
+    if (!quickWin || quickWin.isDestroyed()) return
+    rememberQuickSize()
   })
   quickWin.on('blur', () => {
     // Dismiss on focus loss — but only when the panel is NOT pinned.
@@ -289,25 +313,30 @@ export function toggleQuickPanel(forceAdd = false) {
 
 export function showQuickPanel(forceAdd = false) {
   const win = ensureQuickWindow()
-  // max height: 50% of the work area
   const display = screen.getPrimaryDisplay()
   const wa = display.workArea
-  const h = Math.min(560, Math.floor(wa.height * 0.5))
-  win.setSize(400, h, false)
+  // reopen at the user-resized size (default: 400 × half of the work area),
+  // clamped into the CURRENT work area so a smaller display can't crop it
+  const saved = getSetting('quickPanelSize', null)
+  const maxW = Math.min(QUICK_MAX.w, wa.width - 16)
+  const maxH = Math.min(QUICK_MAX.h, wa.height - 12)
+  const clamp = (v, lo, hi) => Math.round(Math.min(Math.max(v, lo), Math.max(lo, hi)))
+  const w = clamp(saved?.w || 400, QUICK_MIN.w, maxW)
+  const h = clamp(saved?.h || Math.min(560, Math.floor(wa.height * 0.5)), QUICK_MIN.h, maxH)
+  win.setSize(w, h, false)
 
   let x, y
   if (quickPos) {
-    // reopen where the user dragged it, clamped into the work area
-    x = Math.round(Math.min(Math.max(quickPos.x, wa.x + 8), wa.x + wa.width - 408))
-    y = Math.round(Math.min(Math.max(quickPos.y, wa.y + 4), wa.y + wa.height - 60))
+    // reopen where the user dragged it, fully inside the work area
+    x = clamp(quickPos.x, wa.x + 8, wa.x + wa.width - w - 8)
+    y = clamp(quickPos.y, wa.y + 4, wa.y + wa.height - h - 4)
   } else {
     const trayBounds = tray ? tray.getBounds() : null
     if (trayBounds && trayBounds.width > 0) {
-      x = Math.round(trayBounds.x + trayBounds.width / 2 - 200)
-      x = Math.max(wa.x + 8, Math.min(x, wa.x + wa.width - 408))
+      x = clamp(Math.round(trayBounds.x + trayBounds.width / 2 - w / 2), wa.x + 8, wa.x + wa.width - w - 8)
       y = wa.y + 6
     } else {
-      x = wa.x + wa.width - 412
+      x = wa.x + wa.width - w - 12
       y = wa.y + 6
     }
   }

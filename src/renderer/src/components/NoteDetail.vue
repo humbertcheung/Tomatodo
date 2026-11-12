@@ -1,7 +1,8 @@
 <script setup>
 import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { state, updateNote, deleteNote, askConfirm, NOTE_COLORS } from '../store'
+import { state, updateNote, deleteNote, askConfirm, NOTE_COLORS, toast } from '../store'
 import { t } from '../i18n'
+import { copyStyle, pasteStyle } from '../lib/formatpainter'
 import { X, Pin, PinOff, Trash2, List, ListOrdered } from 'lucide-vue-next'
 
 const props = defineProps({ noteId: { type: String, required: true } })
@@ -33,6 +34,21 @@ function fmtCmd(cmd) {
   contentEl.value?.focus()
   document.execCommand(cmd, false, null)
   scheduleSave()
+}
+
+/** ⌥⌘C / ⌥⌘V format painter (shared with the other two editors) */
+function onEditorKeydown(e) {
+  if (!(e.metaKey && e.altKey)) return
+  // e.code, not e.key — Option is a dead key on macOS (⌥⌘C arrives as "ç")
+  if (e.code === 'KeyC') {
+    e.preventDefault()
+    if (copyStyle(contentEl.value)) toast(t('edit.styleCopied'))
+  } else if (e.code === 'KeyV') {
+    e.preventDefault()
+    const r = pasteStyle(contentEl.value)
+    if (r === 'ok') toast(t('edit.stylePasted'))
+    else toast(t('edit.styleEmpty'))
+  }
 }
 
 watch(() => props.noteId, () => {
@@ -124,6 +140,7 @@ function fmtDate(iso) {
         :data-placeholder="t('note.contentPlaceholder')"
         @input="onContentInput"
         @paste="onPaste"
+        @keydown="onEditorKeydown"
       ></div>
       <div class="nd-meta">{{ t('note.updated') }} · {{ fmtDate(note.updated_at) }}</div>
     </div>

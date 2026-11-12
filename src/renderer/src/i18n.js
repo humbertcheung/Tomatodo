@@ -90,6 +90,11 @@ const messages = {
       colors: '颜色',
       count: '{n} 条便签'
     },
+    edit: {
+      styleCopied: '样式已复制，选中目标文本后按 ⌥⌘V 粘贴',
+      stylePasted: '样式已粘贴',
+      styleEmpty: '尚未复制样式'
+    },
     pomo: {
       title: '番茄钟',
       work: '专注',
@@ -299,6 +304,11 @@ const messages = {
       noResults: 'No matching notes', pinned: 'Pinned', pin: 'Pin', unpin: 'Unpin',
       delete: 'Delete note',
       copy: 'Copy note', deleted: 'Note deleted', saveFailed: 'Could not save the note document', updated: 'Updated', colors: 'Color', count: '{n} notes'
+    },
+    edit: {
+      styleCopied: 'Style copied — select text and press ⌥⌘V to paint it',
+      stylePasted: 'Style painted',
+      styleEmpty: 'No style copied yet'
     },
     pomo: {
       title: 'Pomodoro', work: 'Focus', break: 'Break', start: 'Start', pause: 'Pause', reset: 'Reset', resume: 'Resume',
